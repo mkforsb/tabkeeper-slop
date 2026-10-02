@@ -50,6 +50,14 @@ impl Page {
     }
 }
 
+/// A dialog the current page draws over the whole window.
+pub fn modal(app: &App) -> Option<Element<'_>> {
+    match &app.page {
+        Page::Editor(e) => editor::modal(e),
+        _ => None,
+    }
+}
+
 pub fn view(app: &App) -> Element<'_> {
     match &app.page {
         Page::Dashboard => dashboard::view(app),

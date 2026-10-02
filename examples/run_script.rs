@@ -19,13 +19,10 @@ async fn main() {
         }
     };
     let report = script::run(RunInput { script, name: "cli".into(), prev: None, cors_proxy: String::new() }).await;
-    for f in &report.fetches {
-        eprintln!("GET {} -> {:?} {} bytes {} ms {}", f.url, f.status, f.bytes, f.ms, f.error.clone().unwrap_or_default());
+    // The editor's "Run headless" shows the same text, via `app::headless_dump`.
+    for line in tabkeeper::app::run_log(&report) {
+        eprintln!("{line}");
     }
-    for l in &report.logs {
-        eprintln!("log: {l}");
-    }
-    eprintln!("{} rounds, {} ms", report.rounds, report.duration_ms);
     match report.result {
         Ok(out) => println!("{}", serde_json::to_string_pretty(&out).unwrap()),
         Err(e) => {

@@ -1,9 +1,9 @@
 use std::fmt;
 
 use iced::highlighter;
-use iced::widget::{checkbox, column, pick_list, row, space, text, text_editor, Column};
+use iced::widget::{center, checkbox, column, mouse_area, opaque, pick_list, row, space, text, text_editor, Column};
 use iced::{Bottom, Center, Fill, FillPortion, Task, Top};
-use tabkeeper::app::{fmt_ago, fmt_bytes, fmt_count};
+use tabkeeper::app::{self, fmt_ago, fmt_bytes, fmt_count};
 use tabkeeper::engine;
 use tabkeeper::model::Interest;
 use tabkeeper::script::{self, RunInput, RunReport, API_HELP};
@@ -23,6 +23,9 @@ pub struct Editor {
     script: text_editor::Content,
     test: Option<RunReport>,
     testing: bool,
+    /// The "Run headless" text, shown in a dialog.
+    headless: Option<text_editor::Content>,
+    headless_running: bool,
     confirm_delete: bool,
     flash: Option<&'static str>,
     show_log: bool,
@@ -54,6 +57,11 @@ pub enum Msg {
     Test,
     /// Interest id and report.
     TestFinished(String, Box<RunReport>),
+    RunHeadless,
+    /// Interest id and the text to show.
+    HeadlessFinished(String, String),
+    HeadlessAction(text_editor::Action),
+    CloseHeadless,
     RunNow,
     ConfirmDelete(bool),
     Delete,
@@ -79,6 +87,8 @@ impl Editor {
             saved: initial,
             test: None,
             testing: false,
+            headless: None,
+            headless_running: false,
             confirm_delete: false,
             flash: None,
             show_log: false,
@@ -160,6 +170,29 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 ed.testing = false;
             }
         }
+        Msg::RunHeadless => {
+            // Like `run_script`: no previous output, so nothing is compared.
+            let i = ed.draft.clone();
+            ed.headless_running = true;
+            let input = RunInput { script: i.script, name: i.name, prev: None, cors_proxy: app.settings.cors_proxy.clone() };
+            let id = i.id;
+            return Task::perform(script::run(input), move |r| Message::Editor(Msg::HeadlessFinished(id, app::headless_dump(&r))));
+        }
+        Msg::HeadlessFinished(id, dump) => {
+            if ed.draft.id == id {
+                ed.headless = Some(text_editor::Content::with_text(&dump));
+                ed.headless_running = false;
+            }
+        }
+        Msg::HeadlessAction(action) => {
+            // Read-only: allow selecting and scrolling, not editing.
+            if let Some(content) = &mut ed.headless {
+                if !action.is_edit() {
+                    content.perform(action);
+                }
+            }
+        }
+        Msg::CloseHeadless => ed.headless = None,
         Msg::RunNow => {
             let id = ed.draft.id.clone();
             return app.start_run(id);
@@ -199,6 +232,13 @@ pub fn view<'a>(app: &'a App, ed: &'a Editor) -> Element<'a> {
     actions.push(
         btn(if ed.testing { "Testing…" } else { "Test run" }, (!ed.testing && !d.script.trim().is_empty()).then_some(msg(Msg::Test)))
             .into(),
+    );
+    actions.push(
+        btn(
+            if ed.headless_running { "Running…" } else { "Run headless" },
+            (!ed.headless_running && !d.script.trim().is_empty()).then_some(msg(Msg::RunHeadless)),
+        )
+        .into(),
     );
     actions.push(btn_primary("Save", (valid && (dirty || ed.is_new)).then_some(msg(Msg::Save))).into());
     let title = if ed.is_new { "New interest" } else { ed.saved.name.as_str() };
@@ -327,6 +367,26 @@ fn side<'a>(app: &'a App, ed: &'a Editor) -> Column<'a, Message> {
         side = side.push(panel(p));
     }
     side.push(panel(details("Script reference".into(), ed.show_reference, msg(Msg::ToggleReference), reference)))
+}
+
+/// The "Run headless" dialog, drawn over the whole window. Clicking outside it closes it.
+pub fn modal(ed: &Editor) -> Option<Element<'_>> {
+    let content = ed.headless.as_ref()?;
+    let dialog = panel(
+        column![
+            row![h2("Headless run"), space::horizontal(), btn_small("Close", Some(msg(Msg::CloseHeadless)))].align_y(Center),
+            text_editor(content)
+                .on_action(|a| msg(Msg::HeadlessAction(a)))
+                .font(mono())
+                .size(SMALL)
+                .height(Fill)
+                .style(style::text_editor),
+        ]
+        .spacing(10),
+    )
+    .max_width(960)
+    .height(Fill);
+    Some(opaque(mouse_area(center(opaque(dialog)).padding(24).style(style::backdrop)).on_press(msg(Msg::CloseHeadless))))
 }
 
 fn reference<'a>() -> Element<'a> {

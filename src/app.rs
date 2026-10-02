@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::engine;
 use crate::model::*;
+use crate::script::RunReport;
 use crate::templates::TEMPLATES;
 
 /// Everything persisted, for export/import.
@@ -45,6 +46,28 @@ pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
     let Some(from) = list.iter().position(|i| i.id == id) else { return };
     let interest = list.remove(from);
     list.insert(to.min(list.len()), interest);
+}
+
+/// What `run_script` prints to stderr: fetches, the script's log lines and timing.
+pub fn run_log(report: &RunReport) -> Vec<String> {
+    let mut lines: Vec<String> = report
+        .fetches
+        .iter()
+        .map(|f| format!("GET {} -> {:?} {} bytes {} ms {}", f.url, f.status, f.bytes, f.ms, f.error.clone().unwrap_or_default()))
+        .collect();
+    lines.extend(report.logs.iter().map(|l| format!("log: {l}")));
+    lines.push(format!("{} rounds, {} ms", report.rounds, report.duration_ms));
+    lines
+}
+
+/// A run as `run_script` prints it: [`run_log`], then the output as JSON or the error.
+pub fn headless_dump(report: &RunReport) -> String {
+    let mut lines = run_log(report);
+    lines.push(match &report.result {
+        Ok(out) => serde_json::to_string_pretty(out).unwrap_or_default(),
+        Err(e) => format!("error: {e}"),
+    });
+    lines.join("\n")
 }
 
 /// The example interests offered on an empty dashboard.
@@ -188,5 +211,13 @@ mod tests {
         assert_eq!(ids(&list), "dcab");
         move_interest(&mut list, "missing", 0);
         assert_eq!(ids(&list), "dcab");
+    }
+
+    #[test]
+    fn headless_dump_matches_run_script() {
+        let report = |result| RunReport { result, logs: vec!["hi".into()], fetches: vec![], duration_ms: 7, rounds: 1 };
+        assert_eq!(headless_dump(&report(Err("boom".into()))), "log: hi\n1 rounds, 7 ms\nerror: boom");
+        let out = Output { title: "T".into(), ..Default::default() };
+        assert!(headless_dump(&report(Ok(out))).starts_with("log: hi\n1 rounds, 7 ms\n{\n  \"title\": \"T\","));
     }
 }

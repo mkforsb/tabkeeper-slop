@@ -425,20 +425,17 @@ impl App {
                 .width(Fill)
                 .height(Fill),
         ];
-        match &self.toast {
-            Some(t) => stack![
-                main,
-                bottom_right(
-                    button(text(t.as_str()))
-                        .padding([10, 14])
-                        .style(style::toast_button)
-                        .on_press(Message::DismissToast)
-                )
-                .padding(20)
-            ]
-            .into(),
-            None => main.into(),
+        let mut layers = stack![main];
+        if let Some(modal) = pages::modal(self) {
+            layers = layers.push(modal);
         }
+        if let Some(t) = &self.toast {
+            layers = layers.push(
+                bottom_right(button(text(t.as_str())).padding([10, 14]).style(style::toast_button).on_press(Message::DismissToast))
+                    .padding(20),
+            );
+        }
+        layers.into()
     }
 
     fn sidebar(&self) -> Element<'_> {

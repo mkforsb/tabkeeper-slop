@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use tabkeeper::engine;
+use tabkeeper::{app, engine};
 use tabkeeper::model::Interest;
 use tabkeeper::script::{self, RunInput, RunReport, API_HELP};
 use tabkeeper::templates::{self, TEMPLATES};
@@ -41,6 +41,9 @@ fn EditorForm(id: String) -> Element {
     let mut form = use_signal(|| (0u32, initial.clone()));
     let mut test = use_signal(|| None::<RunReport>);
     let mut testing = use_signal(|| false);
+    // The "Run headless" text, shown in a dialog.
+    let mut headless = use_signal(|| None::<String>);
+    let mut headless_running = use_signal(|| false);
     let mut confirm_delete = use_signal(|| false);
     let mut flash = use_signal(|| None::<String>);
     let nav = navigator();
@@ -79,6 +82,18 @@ fn EditorForm(id: String) -> Element {
         });
     };
 
+    // Like `run_script`: no previous output, so nothing is compared.
+    let run_headless = move |_| {
+        let i = draft();
+        let cors_proxy = SETTINGS.read().cors_proxy.clone();
+        headless_running.set(true);
+        spawn(async move {
+            let r = script::run(RunInput { script: i.script, name: i.name, prev: None, cors_proxy }).await;
+            headless.set(Some(app::headless_dump(&r)));
+            headless_running.set(false);
+        });
+    };
+
     rsx! {
         div { class: "page-head",
             h1 { if is_new { "New interest" } else { "{saved().name}" } }
@@ -90,6 +105,13 @@ fn EditorForm(id: String) -> Element {
                 }
                 button { class: "btn", disabled: testing() || d.script.trim().is_empty(), onclick: run_test,
                     if testing() { span { class: "spinner" } "Testing…" } else { "Test run" }
+                }
+                button {
+                    class: "btn",
+                    title: "Run the script as run_script does and show its raw output",
+                    disabled: headless_running() || d.script.trim().is_empty(),
+                    onclick: run_headless,
+                    if headless_running() { span { class: "spinner" } "Running…" } else { "Run headless" }
                 }
                 button { class: "btn btn-primary", disabled: !valid || (!dirty && !is_new), onclick: save, "Save" }
             }
@@ -218,6 +240,18 @@ fn EditorForm(id: String) -> Element {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        if let Some(dump) = headless() {
+            div { class: "modal-backdrop", onclick: move |_| headless.set(None),
+                div { class: "panel modal", onclick: move |e| e.stop_propagation(),
+                    div { class: "panel-head",
+                        h2 { "Headless run" }
+                        button { class: "btn btn-small", onclick: move |_| headless.set(None), "Close" }
+                    }
+                    textarea { class: "code", readonly: true, value: "{dump}" }
                 }
             }
         }

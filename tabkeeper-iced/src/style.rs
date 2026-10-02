@@ -154,6 +154,11 @@ pub fn error_box(theme: &Theme) -> container::Style {
     }
 }
 
+/// Dims the window behind a dialog.
+pub fn backdrop(_theme: &Theme) -> container::Style {
+    container::Style { background: Some(Color::BLACK.scale_alpha(0.45).into()), ..Default::default() }
+}
+
 pub fn log(theme: &Theme) -> container::Style {
     container::Style { background: Some(colors(theme).surface_2.into()), border: border::rounded(7), ..Default::default() }
 }
