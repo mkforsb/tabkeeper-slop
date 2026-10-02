@@ -22,6 +22,8 @@ pub struct Interest {
     pub enabled: bool,
     /// Show a desktop notification when an update is caught.
     pub notify: bool,
+    /// Show the output's items last to first. Display only; detection is unaffected.
+    pub reverse_order: bool,
     pub created_at: Millis,
 }
 
@@ -35,6 +37,7 @@ impl Default for Interest {
             interval_mins: 60,
             enabled: true,
             notify: true,
+            reverse_order: false,
             created_at: now_ms(),
         }
     }

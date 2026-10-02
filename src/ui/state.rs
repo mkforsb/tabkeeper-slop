@@ -51,6 +51,12 @@ pub fn upsert_interest(updated: Interest) {
     app::upsert_interest(&mut INTERESTS.write(), &mut STATES.write(), updated);
 }
 
+pub fn set_reversed(id: &str, on: bool) {
+    if let Some(i) = INTERESTS.write().iter_mut().find(|i| i.id == id) {
+        i.reverse_order = on;
+    }
+}
+
 pub fn delete_interest(id: &str) {
     INTERESTS.write().retain(|i| i.id != id);
     STATES.write().remove(id);

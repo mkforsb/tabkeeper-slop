@@ -47,6 +47,7 @@ pub enum Msg {
     ImageUrl(String),
     Enabled(bool),
     Notify(bool),
+    Reverse(bool),
     Template(TemplateChoice),
     Script(text_editor::Action),
     Save,
@@ -113,6 +114,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
         }
         Msg::Enabled(on) => ed.draft.enabled = on,
         Msg::Notify(on) => ed.draft.notify = on,
+        Msg::Reverse(on) => ed.draft.reverse_order = on,
         Msg::Template(TemplateChoice(i)) => {
             let t = &TEMPLATES[i];
             ed.draft.script = t.script.to_string();
@@ -242,6 +244,7 @@ fn form<'a>(app: &'a App, ed: &'a Editor) -> Column<'a, Message> {
         row![
             checkbox(d.enabled).label("Refresh automatically").on_toggle(|on| msg(Msg::Enabled(on))),
             checkbox(d.notify).label("Notify on updates").on_toggle(|on| msg(Msg::Notify(on))),
+            checkbox(d.reverse_order).label("Reverse item order").on_toggle(|on| msg(Msg::Reverse(on))),
         ]
         .spacing(16),
         column![
@@ -319,7 +322,7 @@ fn side<'a>(app: &'a App, ed: &'a Editor) -> Column<'a, Message> {
         }
         if let Some(out) = &st.last_output {
             let summary = format!("Current output ({} items)", out.items.len());
-            p = p.push(details(summary, ed.show_output, msg(Msg::ToggleOutput), || output_view(app, out, 20, true)));
+            p = p.push(details(summary, ed.show_output, msg(Msg::ToggleOutput), || output_view(app, out, 20, true, ed.draft.reverse_order)));
         }
         side = side.push(panel(p));
     }
@@ -376,7 +379,7 @@ fn test_result<'a>(app: &'a App, report: &'a RunReport, interest_id: &str) -> El
         p = p.push(log_box(&report.logs));
     }
     if let Ok(out) = &report.result {
-        p = p.push(output_view(app, out, 30, true));
+        p = p.push(output_view(app, out, 30, true, false));
     }
     panel(p).into()
 }

@@ -77,6 +77,7 @@ pub enum Message {
     MarkEventRead(String),
     AddExamples,
     SetEnabled(String, bool),
+    SetReversed(String, bool),
     ConfirmDelete(Option<String>),
     /// Reordering on the Interests page.
     DragStart(String),
@@ -239,6 +240,12 @@ impl App {
             Message::SetEnabled(id, enabled) => {
                 if let Some(i) = self.interests.iter_mut().find(|i| i.id == id) {
                     i.enabled = enabled;
+                    self.dirty.interests = true;
+                }
+            }
+            Message::SetReversed(id, on) => {
+                if let Some(i) = self.interests.iter_mut().find(|i| i.id == id) {
+                    i.reverse_order = on;
                     self.dirty.interests = true;
                 }
             }

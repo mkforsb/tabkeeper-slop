@@ -95,7 +95,7 @@ fn card<'a>(app: &'a App, interest: &'a Interest) -> Element<'a> {
         body = body.push(error_box(err));
     }
     body = match &st.last_output {
-        Some(out) => body.push(output_view(app, out, 4, false)),
+        Some(out) => body.push(output_view(app, out, 4, false, interest.reverse_order)),
         None if running => body.push(muted("Running for the first time…")),
         None if st.last_error.is_none() => body.push(muted("Not checked yet.")),
         None => body,
@@ -104,6 +104,7 @@ fn card<'a>(app: &'a App, interest: &'a Interest) -> Element<'a> {
     let foot = row![
         status_pill(app, interest),
         space::horizontal(),
+        btn_small("↑↓", Some(Message::SetReversed(interest.id.clone(), !interest.reverse_order))),
         btn_small("Refresh", (!running).then(|| Message::Run(interest.id.clone()))),
         btn_small("Edit", Some(Message::Navigate(Route::Editor(interest.id.clone())))),
     ]

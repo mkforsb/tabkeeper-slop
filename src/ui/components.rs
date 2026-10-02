@@ -85,10 +85,20 @@ pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool) -> Element {
     }
 }
 
-/// Renders a script output. `limit` caps the number of items shown.
+/// Renders a script output. `limit` caps the number of items shown;
+/// `reverse` lists them last to first.
 #[component]
-pub fn OutputView(output: Output, #[props(default = usize::MAX)] limit: usize, #[props(default = true)] show_image: bool) -> Element {
-    let shown: Vec<Item> = output.items.iter().take(limit).cloned().collect();
+pub fn OutputView(
+    output: Output,
+    #[props(default = usize::MAX)] limit: usize,
+    #[props(default = true)] show_image: bool,
+    #[props(default = false)] reverse: bool,
+) -> Element {
+    let shown: Vec<Item> = if reverse {
+        output.items.iter().rev().take(limit).cloned().collect()
+    } else {
+        output.items.iter().take(limit).cloned().collect()
+    };
     let hidden = output.items.len().saturating_sub(shown.len());
     rsx! {
         div { class: "output",

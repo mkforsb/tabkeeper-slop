@@ -125,6 +125,10 @@ fn EditorForm(id: String) -> Element {
                                 input { r#type: "checkbox", checked: d.notify, onchange: move |e| draft.write().notify = e.checked() }
                                 "Notify on updates"
                             }
+                            label { class: "check",
+                                input { r#type: "checkbox", checked: d.reverse_order, onchange: move |e| draft.write().reverse_order = e.checked() }
+                                "Reverse item order"
+                            }
                             label { class: "template",
                                 select {
                                     onchange: move |e| {
@@ -198,7 +202,7 @@ fn EditorForm(id: String) -> Element {
                         if let Some(out) = &st.last_output {
                             details {
                                 summary { "Current output ({out.items.len()} items)" }
-                                OutputView { output: out.clone(), limit: 20 }
+                                OutputView { output: out.clone(), limit: 20, reverse: d.reverse_order }
                             }
                         }
                     }

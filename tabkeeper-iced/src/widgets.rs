@@ -199,8 +199,9 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool) -> Element<'a> {
     }
 }
 
-/// Renders a script output. `limit` caps the number of items shown.
-pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: bool) -> Element<'a> {
+/// Renders a script output. `limit` caps the number of items shown;
+/// `reverse` lists them last to first.
+pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: bool, reverse: bool) -> Element<'a> {
     let mut col = column![].spacing(6).width(Fill);
     if show_image && !output.image.is_empty() && !app.images.failed(&output.image) {
         let placeholder = container(space::horizontal()).style(style::log);
@@ -217,7 +218,8 @@ pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: 
     }
     let shown = output.items.len().min(limit);
     if shown > 0 {
-        col = col.push(Column::with_children(output.items.iter().take(limit).map(|i| item_row(app, i, false))).spacing(4));
+        let items: Box<dyn Iterator<Item = &Item>> = if reverse { Box::new(output.items.iter().rev()) } else { Box::new(output.items.iter()) };
+        col = col.push(Column::with_children(items.take(limit).map(|i| item_row(app, i, false))).spacing(4));
     }
     let hidden = output.items.len() - shown;
     if hidden > 0 {

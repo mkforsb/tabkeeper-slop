@@ -95,6 +95,8 @@ fn InterestCard(interest: Interest) -> Element {
     let image = display_image(&interest);
     let id = interest.id.clone();
     let id2 = interest.id.clone();
+    let id3 = interest.id.clone();
+    let reversed = interest.reverse_order;
     let running = RUNNING.read().contains(&interest.id);
 
     rsx! {
@@ -119,7 +121,7 @@ fn InterestCard(interest: Interest) -> Element {
                     div { class: "error-box small", "✕ {err}" }
                 }
                 match &st.last_output {
-                    Some(out) => rsx! { OutputView { output: out.clone(), limit: 4, show_image: false } },
+                    Some(out) => rsx! { OutputView { output: out.clone(), limit: 4, show_image: false, reverse: reversed } },
                     None if running => rsx! { p { class: "muted small", "Running for the first time…" } },
                     None if st.last_error.is_none() => rsx! { p { class: "muted small", "Not checked yet." } },
                     None => rsx! {},
@@ -128,6 +130,7 @@ fn InterestCard(interest: Interest) -> Element {
             footer { class: "card-foot",
                 StatusPill { interest: interest.clone() }
                 div { class: "actions",
+                    button { class: "btn btn-small", title: "Reverse item order", onclick: move |_| set_reversed(&id3, !reversed), "↑↓" }
                     button { class: "btn btn-small", disabled: running, onclick: move |_| start_run(id.clone()), "Refresh" }
                     Link { class: "btn btn-small", to: Route::Editor { id: interest.id.clone() }, "Edit" }
                 }
