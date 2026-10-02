@@ -23,7 +23,7 @@ pub fn view(app: &App) -> Element<'_> {
     let head = page_head(
         "Dashboard",
         vec![
-            btn("Refresh all", has_interests.then_some(Message::RefreshAll)).into(),
+            btn("Refresh all", (enabled > 0).then_some(Message::RefreshAll)).into(),
             btn_primary("+ New interest", Some(Message::Navigate(Route::Editor("new".into())))).into(),
         ],
     );
@@ -49,14 +49,27 @@ fn dash(app: &App) -> Element<'_> {
     let cards_width = if side_by_side { width - FEED_WIDTH - 16.0 } else { width };
     let n = (((cards_width + GAP) / (CARD_MIN_WIDTH + GAP)).floor() as usize).max(1);
 
+    // Disabled interests are only listed on the Interests page.
     let mut columns: Vec<Vec<Element>> = (0..n).map(|_| Vec::new()).collect();
-    for (k, i) in app.interests.iter().enumerate() {
+    for (k, i) in app.interests.iter().filter(|i| i.enabled).enumerate() {
         columns[k % n].push(card(app, i));
     }
-    let cards = row(columns.into_iter().map(|c| Column::with_children(c).spacing(GAP).width(Fill).into())).spacing(GAP);
+    let cards: Element = if columns[0].is_empty() {
+        panel(
+            row![
+                muted("All interests are disabled. Enable them on the "),
+                link(text("Interests").size(SMALL), Route::Interests),
+                muted(" page to see them here."),
+            ]
+            .wrap(),
+        )
+        .into()
+    } else {
+        row(columns.into_iter().map(|c| Column::with_children(c).spacing(GAP).width(Fill).into())).spacing(GAP).into()
+    };
 
     if side_by_side {
-        row![cards.width(Fill), feed(app).width(FEED_WIDTH)].spacing(16).align_y(Top).into()
+        row![container(cards).width(Fill), feed(app).width(FEED_WIDTH)].spacing(16).align_y(Top).into()
     } else {
         column![cards, feed(app)].spacing(16).into()
     }

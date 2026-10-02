@@ -28,7 +28,7 @@ pub fn Dashboard() -> Element {
             div { class: "actions",
                 button {
                     class: "btn",
-                    disabled: !has_interests,
+                    disabled: enabled == 0,
                     onclick: move |_| for i in INTERESTS.read().iter().filter(|i| i.enabled) { start_run(i.id.clone()) },
                     "Refresh all"
                 }
@@ -52,7 +52,13 @@ pub fn Dashboard() -> Element {
         } else {
             div { class: "dash",
                 div { class: "cards",
-                    for i in interests { InterestCard { key: "{i.id}", interest: i.clone() } }
+                    if enabled == 0 {
+                        div { class: "panel empty",
+                            p { class: "muted", "All interests are disabled. Enable them on the " Link { to: Route::Interests {}, "Interests" } " page to see them here." }
+                        }
+                    }
+                    // Disabled interests are only listed on the Interests page.
+                    for i in interests.into_iter().filter(|i| i.enabled) { InterestCard { key: "{i.id}", interest: i } }
                 }
                 aside { class: "feed panel",
                     div { class: "panel-head",
@@ -100,7 +106,7 @@ fn InterestCard(interest: Interest) -> Element {
     let running = RUNNING.read().contains(&interest.id);
 
     rsx! {
-        article { class: if interest.enabled { "card" } else { "card disabled" },
+        article { class: "card",
             header { class: "card-head",
                 Avatar { src: image, name: interest.name.clone() }
                 div { class: "card-title",

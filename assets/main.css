@@ -131,7 +131,6 @@ textarea.code { resize: vertical; line-height: 1.5; tab-size: 4; white-space: pr
 .dash { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; }
-.card.disabled { opacity: 0.6; }
 .card-head { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .card-title { flex: 1; min-width: 0; }
 .card-title h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
