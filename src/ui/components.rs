@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use tabkeeper::app::fmt_item_date;
+use tabkeeper::app::{fmt_item_date, SHOW_MORE_STEP};
 use tabkeeper::engine;
 use tabkeeper::model::{Interest, Item, Output};
 
@@ -85,8 +85,8 @@ pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool) -> Element {
     }
 }
 
-/// Renders a script output. `limit` caps the number of items shown;
-/// `reverse` lists them last to first.
+/// Renders a script output. `limit` caps the number of items shown at first;
+/// "+ N more" shows more. `reverse` lists them last to first.
 #[component]
 pub fn OutputView(
     output: Output,
@@ -94,6 +94,8 @@ pub fn OutputView(
     #[props(default = true)] show_image: bool,
     #[props(default = false)] reverse: bool,
 ) -> Element {
+    let mut extra = use_signal(|| 0usize);
+    let limit = limit.saturating_add(extra());
     let shown: Vec<Item> = if reverse {
         output.items.iter().rev().take(limit).cloned().collect()
     } else {
@@ -121,7 +123,12 @@ pub fn OutputView(
                     for item in shown { ItemRow { key: "{item.id}", item: item.clone() } }
                 }
             }
-            if hidden > 0 { div { class: "muted small more", "+ {hidden} more" } }
+            if hidden > 0 || extra() > 0 {
+                div { class: "small more",
+                    if hidden > 0 { button { class: "link-btn", onclick: move |_| extra += SHOW_MORE_STEP, "+ {hidden} more" } }
+                    if extra() > 0 { button { class: "link-btn", onclick: move |_| extra.set(0), "Show fewer" } }
+                }
+            }
         }
     }
 }

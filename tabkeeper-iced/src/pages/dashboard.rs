@@ -108,7 +108,7 @@ fn card<'a>(app: &'a App, interest: &'a Interest) -> Element<'a> {
         body = body.push(error_box(err));
     }
     body = match &st.last_output {
-        Some(out) => body.push(output_view(app, out, 4, false, interest.reverse_order)),
+        Some(out) => body.push(output_view(app, out, 4, false, interest.reverse_order, format!("card:{}", interest.id))),
         None if running => body.push(muted("Running for the first time…")),
         None if st.last_error.is_none() => body.push(muted("Not checked yet.")),
         None => body,

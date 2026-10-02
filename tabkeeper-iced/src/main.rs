@@ -87,6 +87,8 @@ pub enum Message {
     ConfirmClear(bool),
     ClearEvents,
     ShowMoreEvents,
+    /// An output list's key and how many extra items it shows.
+    ShowMore(String, usize),
     OpenUrl(String),
     LoadImage(String),
     ImageLoaded(String, Result<Vec<u8>, String>),
@@ -129,6 +131,9 @@ pub struct App {
     pub page: Page,
     pub dirty: Dirty,
     pub toast: Option<String>,
+    /// Extra items shown in an output's list after clicking "+ N more", by
+    /// list. Reset when changing pages.
+    pub more: HashMap<String, usize>,
     /// As edited in Settings; the fonts in use are fixed at launch.
     pub appearance: Appearance,
     mode: Mode,
@@ -165,6 +170,7 @@ impl App {
             page: Page::Dashboard,
             dirty: Dirty::default(),
             toast: None,
+            more: HashMap::new(),
             appearance: appearance::init().clone(),
             mode: Mode::None,
             window_width: WINDOW_SIZE.width,
@@ -200,6 +206,7 @@ impl App {
     fn handle(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::Navigate(route) => {
+                self.more.clear();
                 self.page = Page::open(self, route);
                 return snap_to(CONTENT.clone(), RelativeOffset::START);
             }
@@ -298,6 +305,8 @@ impl App {
             Message::LoadImage(url) => return self.images.load(url),
             Message::ImageLoaded(url, result) => self.images.loaded(url, result),
             Message::DismissToast => self.toast = None,
+            Message::ShowMore(key, 0) => _ = self.more.remove(&key),
+            Message::ShowMore(key, extra) => _ = self.more.insert(key, extra),
             Message::Editor(msg) => return editor::update(self, msg),
             Message::Settings(msg) => return settings::update(self, msg),
         }

@@ -2,7 +2,7 @@
 
 use iced::widget::{button, column, container, row, rule, space, text, text_input, Column};
 use iced::{padding, Center, Fill, Shrink};
-use tabkeeper::app::{fmt_ago, fmt_in, fmt_item_date};
+use tabkeeper::app::{fmt_ago, fmt_in, fmt_item_date, SHOW_MORE_STEP};
 use tabkeeper::engine;
 use tabkeeper::model::{Interest, Item, Output};
 
@@ -199,9 +199,12 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool) -> Element<'a> {
     }
 }
 
-/// Renders a script output. `limit` caps the number of items shown;
-/// `reverse` lists them last to first.
-pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: bool, reverse: bool) -> Element<'a> {
+/// Renders a script output. `limit` caps the number of items shown at first;
+/// "+ N more" shows more, remembered in [`App::more`] under `key`. `reverse`
+/// lists them last to first.
+pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: bool, reverse: bool, key: String) -> Element<'a> {
+    let extra = app.more.get(&key).copied().unwrap_or(0);
+    let limit = limit.saturating_add(extra);
     let mut col = column![].spacing(6).width(Fill);
     if show_image && !output.image.is_empty() && !app.images.failed(&output.image) {
         let placeholder = container(space::horizontal()).style(style::log);
@@ -222,8 +225,16 @@ pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: 
         col = col.push(Column::with_children(items.take(limit).map(|i| item_row(app, i, false))).spacing(4));
     }
     let hidden = output.items.len() - shown;
-    if hidden > 0 {
-        col = col.push(muted(format!("+ {hidden} more")));
+    if hidden > 0 || extra > 0 {
+        let more_link = |label: String, m: Message| button(text(label).size(SMALL)).padding(0).style(style::link).on_press(m);
+        let mut more = row![].spacing(12);
+        if hidden > 0 {
+            more = more.push(more_link(format!("+ {hidden} more"), Message::ShowMore(key.clone(), extra + SHOW_MORE_STEP)));
+        }
+        if extra > 0 {
+            more = more.push(more_link("Show fewer".into(), Message::ShowMore(key, 0)));
+        }
+        col = col.push(more);
     }
     col.into()
 }

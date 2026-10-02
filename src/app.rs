@@ -48,6 +48,9 @@ pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
     list.insert(to.min(list.len()), interest);
 }
 
+/// How many more items each click on an output's "+ N more" shows.
+pub const SHOW_MORE_STEP: usize = 20;
+
 /// What `run_script` prints to stderr: fetches, the script's log lines and timing.
 pub fn run_log(report: &RunReport) -> Vec<String> {
     let mut lines: Vec<String> = report
