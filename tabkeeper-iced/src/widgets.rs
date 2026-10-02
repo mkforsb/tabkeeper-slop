@@ -80,11 +80,27 @@ pub fn error_box<'a>(msg: impl std::fmt::Display) -> Element<'a> {
 }
 
 pub fn tile<'a>(label: &'a str, value: String, sub: String) -> Element<'a> {
-    container(column![text(label).size(SMALL).style(style::ink_2), text(value).size(28).font(bold()), muted(sub)].spacing(2))
+    tile_with(label, value, sub, None)
+}
+
+/// A [`tile`] with a small link after its sub text, e.g. "Reset".
+pub fn tile_with<'a>(label: &'a str, value: String, sub: String, action: Option<Element<'a>>) -> Element<'a> {
+    let sub = row![muted(sub)].push(action).spacing(8).align_y(Center);
+    container(column![text(label).size(SMALL).style(style::ink_2), text(value).size(28).font(bold()), sub].spacing(2))
         .padding([14, 16])
         .width(Fill)
         .style(style::panel)
         .into()
+}
+
+/// A small text button in the link color.
+pub fn link_btn<'a>(label: impl text::IntoFragment<'a>, on_press: Message) -> button::Button<'a, Message> {
+    button(text(label).size(SMALL)).padding(0).style(style::link).on_press(on_press)
+}
+
+/// The "Reset" link on failure count tiles, if there's anything to reset.
+pub fn reset_failures<'a>(app: &App) -> Option<Element<'a>> {
+    (app.system.failures > 0).then(|| link_btn("Reset", Message::ResetFailures).into())
 }
 
 /// Two-column key/value list.
@@ -226,13 +242,12 @@ pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: 
     }
     let hidden = output.items.len() - shown;
     if hidden > 0 || extra > 0 {
-        let more_link = |label: String, m: Message| button(text(label).size(SMALL)).padding(0).style(style::link).on_press(m);
         let mut more = row![].spacing(12);
         if hidden > 0 {
-            more = more.push(more_link(format!("+ {hidden} more"), Message::ShowMore(key.clone(), extra + SHOW_MORE_STEP)));
+            more = more.push(link_btn(format!("+ {hidden} more"), Message::ShowMore(key.clone(), extra + SHOW_MORE_STEP)));
         }
         if extra > 0 {
-            more = more.push(more_link("Show fewer".into(), Message::ShowMore(key, 0)));
+            more = more.push(link_btn("Show fewer", Message::ShowMore(key, 0)));
         }
         col = col.push(more);
     }

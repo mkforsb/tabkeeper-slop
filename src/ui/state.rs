@@ -57,6 +57,10 @@ pub fn set_reversed(id: &str, on: bool) {
     }
 }
 
+pub fn reset_failures() {
+    app::reset_failures(&mut STATES.write(), &mut SYSTEM.write());
+}
+
 pub fn delete_interest(id: &str) {
     INTERESTS.write().retain(|i| i.id != id);
     STATES.write().remove(id);

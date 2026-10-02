@@ -56,7 +56,9 @@ pub fn Dashboard() -> Element {
         div { class: "tiles",
             Tile { label: "Interests watched", value: fmt_count(enabled), sub: format!("{total} total") }
             Tile { label: "Updates in last 24h", value: fmt_count(updates_24h), sub: format!("{} unread", unread_count(None)) }
-            Tile { label: "Refreshes", value: fmt_count(sys.refreshes), sub: format!("{} failed", fmt_count(sys.failures)) }
+            Tile { label: "Refreshes", value: fmt_count(sys.refreshes), sub: format!("{} failed", fmt_count(sys.failures)),
+                if sys.failures > 0 { ResetFailures {} }
+            }
             Tile {
                 label: "Failing now",
                 value: fmt_count(failing),
@@ -112,14 +114,22 @@ pub fn Dashboard() -> Element {
     }
 }
 
+/// `children` go after the sub text, e.g. a [`ResetFailures`] link.
 #[component]
-fn Tile(label: String, value: String, sub: String) -> Element {
+pub fn Tile(label: String, value: String, sub: String, children: Element) -> Element {
     rsx! {
         div { class: "tile",
             div { class: "tile-label", "{label}" }
             div { class: "tile-value", "{value}" }
-            div { class: "tile-sub", "{sub}" }
+            div { class: "tile-sub", "{sub}" {children} }
         }
+    }
+}
+
+#[component]
+pub fn ResetFailures() -> Element {
+    rsx! {
+        button { class: "link-btn", title: "Reset the failure counts to zero", onclick: move |_| reset_failures(), "Reset" }
     }
 }
 

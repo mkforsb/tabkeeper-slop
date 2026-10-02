@@ -16,7 +16,7 @@ pub fn view(app: &App) -> Element<'_> {
 
     let tiles = tiles(vec![
         tile("Refreshes", fmt_count(sys.refreshes), format!("{} fetches", fmt_count(sys.fetches))),
-        tile("Failures", fmt_count(sys.failures), format!("{fail_rate:.1}% of refreshes")),
+        tile_with("Failures", fmt_count(sys.failures), format!("{fail_rate:.1}% of refreshes"), reset_failures(app)),
         tile("Updates caught", fmt_count(sys.updates), format!("{} in history", app.events.len())),
         tile("Data fetched", fmt_bytes(sys.bytes), format!("{} stored locally", fmt_bytes(storage as u64))),
     ]);

@@ -70,6 +70,7 @@ pub enum Message {
     Run(String),
     RefreshAll,
     ShuffleCards,
+    ResetFailures,
     /// Interest id, the script that ran, and its report.
     RunFinished(String, String, Box<RunReport>),
     Notified(Result<(), String>),
@@ -290,6 +291,11 @@ impl App {
                 }
                 _ => {}
             },
+            Message::ResetFailures => {
+                app::reset_failures(&mut self.states, &mut self.system);
+                self.dirty.states = true;
+                self.dirty.system = true;
+            }
             Message::ShuffleCards => {
                 app::shuffle_cards(&mut self.settings.dashboard_order, &self.interests);
                 self.dirty.settings = true;

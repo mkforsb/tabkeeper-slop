@@ -32,7 +32,12 @@ pub fn view<'a>(app: &'a App, drag: Option<&Drag>) -> Element<'a> {
     let tiles = tiles(vec![
         tile("Interests watched", fmt_count(enabled), format!("{total} total")),
         tile("Updates in last 24h", fmt_count(updates_24h), format!("{} unread", app.unread_count(None))),
-        tile("Refreshes", fmt_count(app.system.refreshes), format!("{} failed", fmt_count(app.system.failures))),
+        tile_with(
+            "Refreshes",
+            fmt_count(app.system.refreshes),
+            format!("{} failed", fmt_count(app.system.failures)),
+            reset_failures(app),
+        ),
         tile(
             "Failing now",
             fmt_count(failing),

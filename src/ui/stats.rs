@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 
+use super::dashboard::{ResetFailures, Tile};
 use super::state::*;
 use super::{fmt_ago, fmt_bytes, fmt_count, fmt_duration, fmt_time, Route};
 
@@ -18,10 +19,12 @@ pub fn Stats() -> Element {
         div { class: "page-head", h1 { "Stats" } }
 
         div { class: "tiles",
-            StatTile { label: "Refreshes", value: fmt_count(sys.refreshes), sub: format!("{} fetches", fmt_count(sys.fetches)) }
-            StatTile { label: "Failures", value: fmt_count(sys.failures), sub: format!("{fail_rate:.1}% of refreshes") }
-            StatTile { label: "Updates caught", value: fmt_count(sys.updates), sub: format!("{} in history", EVENTS.read().len()) }
-            StatTile { label: "Data fetched", value: fmt_bytes(sys.bytes), sub: format!("{} stored locally", fmt_bytes(storage as u64)) }
+            Tile { label: "Refreshes", value: fmt_count(sys.refreshes), sub: format!("{} fetches", fmt_count(sys.fetches)) }
+            Tile { label: "Failures", value: fmt_count(sys.failures), sub: format!("{fail_rate:.1}% of refreshes"),
+                if sys.failures > 0 { ResetFailures {} }
+            }
+            Tile { label: "Updates caught", value: fmt_count(sys.updates), sub: format!("{} in history", EVENTS.read().len()) }
+            Tile { label: "Data fetched", value: fmt_bytes(sys.bytes), sub: format!("{} stored locally", fmt_bytes(storage as u64)) }
         }
 
         div { class: "panel",
@@ -81,17 +84,6 @@ pub fn Stats() -> Element {
                     }
                 }
             }
-        }
-    }
-}
-
-#[component]
-fn StatTile(label: String, value: String, sub: String) -> Element {
-    rsx! {
-        div { class: "tile",
-            div { class: "tile-label", "{label}" }
-            div { class: "tile-value", "{value}" }
-            div { class: "tile-sub", "{sub}" }
         }
     }
 }

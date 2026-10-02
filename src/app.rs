@@ -47,6 +47,15 @@ pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
     list.insert(to.min(list.len()), interest);
 }
 
+/// Zeroes the failure counts, overall and per interest. Whether an interest
+/// is failing right now (its last error and backoff) is left as is.
+pub fn reset_failures(states: &mut HashMap<String, InterestState>, sys: &mut SystemStats) {
+    sys.failures = 0;
+    for st in states.values_mut() {
+        st.stats.failures = 0;
+    }
+}
+
 /// All interests in Dashboard order: those in `order` (as saved in
 /// `Settings::dashboard_order`) first, then the rest in their list order.
 fn dashboard_order<'a>(interests: &'a [Interest], order: &[String]) -> Vec<&'a Interest> {
@@ -265,6 +274,18 @@ mod tests {
         let mut sorted = order.clone();
         sorted.sort();
         assert_eq!(sorted.join(""), "abcde");
+    }
+
+    #[test]
+    fn reset_failures_keeps_failing_state() {
+        let mut sys = SystemStats { failures: 5, refreshes: 9, ..Default::default() };
+        let mut st = InterestState { fail_streak: 2, last_error: Some("boom".into()), ..Default::default() };
+        st.stats.failures = 3;
+        let mut states = HashMap::from([("a".to_string(), st)]);
+        reset_failures(&mut states, &mut sys);
+        assert_eq!((sys.failures, sys.refreshes), (0, 9));
+        let st = &states["a"];
+        assert_eq!((st.stats.failures, st.fail_streak, st.last_error.as_deref()), (0, 2, Some("boom")));
     }
 
     #[test]
