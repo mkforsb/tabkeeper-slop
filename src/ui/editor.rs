@@ -34,6 +34,11 @@ fn EditorForm(id: String) -> Element {
 
     let mut draft = use_signal(|| initial.clone());
     let mut saved = use_signal(|| initial.clone());
+    // Text fields are uncontrolled: writing `value` on every keystroke races the
+    // webview (stale values overwrite newer input and the caret jumps to the end).
+    // `form` holds what the fields were last filled with; bumping its revision
+    // remounts them, which is how programmatic edits reach the DOM.
+    let mut form = use_signal(|| (0u32, initial.clone()));
     let mut test = use_signal(|| None::<RunReport>);
     let mut testing = use_signal(|| false);
     let mut confirm_delete = use_signal(|| false);
@@ -54,6 +59,8 @@ fn EditorForm(id: String) -> Element {
         upsert_interest(i.clone());
         draft.set(i.clone());
         saved.set(i.clone());
+        let rev = form.peek().0 + 1;
+        form.set((rev, i.clone()));
         flash.set(Some("Saved".into()));
         if is_new {
             nav.replace(Route::Editor { id: i.id });
@@ -90,70 +97,76 @@ fn EditorForm(id: String) -> Element {
 
         div { class: "editor",
             div { class: "editor-main",
-                div { class: "panel form",
-                    div { class: "form-row",
-                        label { "Name"
-                            input { value: "{d.name}", placeholder: "e.g. New screenings at Bio Rio",
-                                oninput: move |e| { draft.write().name = e.value(); flash.set(None); } }
-                        }
-                        label { class: "narrow", "Every (minutes)"
-                            input { r#type: "number", min: "1", value: "{d.interval_mins}",
-                                oninput: move |e| { if let Ok(v) = e.value().parse() { draft.write().interval_mins = v; } flash.set(None); } }
-                        }
-                    }
-                    div { class: "form-row",
-                        label { "Image URL"
-                            input { value: "{d.image_url}", placeholder: "Optional; defaults to the image the script returns",
-                                oninput: move |e| { draft.write().image_url = e.value(); flash.set(None); } }
-                        }
-                        Avatar { src: d.image_url.clone(), name: d.name.clone(), class: "avatar avatar-large" }
-                    }
-                    div { class: "form-row checks",
-                        label { class: "check",
-                            input { r#type: "checkbox", checked: d.enabled, onchange: move |e| draft.write().enabled = e.checked() }
-                            "Refresh automatically"
-                        }
-                        label { class: "check",
-                            input { r#type: "checkbox", checked: d.notify, onchange: move |e| draft.write().notify = e.checked() }
-                            "Notify on updates"
-                        }
-                        label { class: "template",
-                            select {
-                                onchange: move |e| {
-                                    if let Some(t) = templates::find(&e.value()) {
-                                        let mut dr = draft.write();
-                                        dr.script = t.script.to_string();
-                                        dr.interval_mins = t.interval_mins;
-                                        if dr.name.trim().is_empty() { dr.name = t.name.to_string(); }
-                                    }
-                                },
-                                option { value: "", selected: true, "Start from a template…" }
-                                for t in TEMPLATES { option { value: t.key, "{t.label}" } }
+                for (rev, f) in [form()] {
+                    div { key: "{rev}", class: "panel form",
+                        div { class: "form-row",
+                            label { "Name"
+                                input { initial_value: "{f.name}", placeholder: "e.g. New screenings at Bio Rio",
+                                    oninput: move |e| { draft.write().name = e.value(); flash.set(None); } }
+                            }
+                            label { class: "narrow", "Every (minutes)"
+                                input { r#type: "number", min: "1", initial_value: "{f.interval_mins}",
+                                    oninput: move |e| { if let Ok(v) = e.value().parse() { draft.write().interval_mins = v; } flash.set(None); } }
                             }
                         }
-                    }
-                    label { "Script"
-                        textarea {
-                            class: "code",
-                            spellcheck: false,
-                            rows: 24,
-                            value: "{d.script}",
-                            oninput: move |e| { draft.write().script = e.value(); flash.set(None); },
+                        div { class: "form-row",
+                            label { "Image URL"
+                                input { initial_value: "{f.image_url}", placeholder: "Optional; defaults to the image the script returns",
+                                    oninput: move |e| { draft.write().image_url = e.value(); flash.set(None); } }
+                            }
+                            Avatar { src: d.image_url.clone(), name: d.name.clone(), class: "avatar avatar-large" }
                         }
-                    }
-                    if !is_new && d.script != saved().script {
-                        p { class: "muted small", "Saving a changed script resets this interest's baseline: the next run records the current state without reporting updates." }
-                    }
-                    if !is_new {
-                        div { class: "danger-zone",
-                            if confirm_delete() {
-                                span { class: "small", "Delete this interest and its history?" }
-                                button { class: "btn btn-small btn-danger",
-                                    onclick: move |_| { delete_interest(&draft().id); nav.push(Route::Interests {}); },
-                                    "Delete" }
-                                button { class: "btn btn-small", onclick: move |_| confirm_delete.set(false), "Cancel" }
-                            } else {
-                                button { class: "btn btn-small", onclick: move |_| confirm_delete.set(true), "Delete interest" }
+                        div { class: "form-row checks",
+                            label { class: "check",
+                                input { r#type: "checkbox", checked: d.enabled, onchange: move |e| draft.write().enabled = e.checked() }
+                                "Refresh automatically"
+                            }
+                            label { class: "check",
+                                input { r#type: "checkbox", checked: d.notify, onchange: move |e| draft.write().notify = e.checked() }
+                                "Notify on updates"
+                            }
+                            label { class: "template",
+                                select {
+                                    onchange: move |e| {
+                                        if let Some(t) = templates::find(&e.value()) {
+                                            let mut dr = draft.write();
+                                            dr.script = t.script.to_string();
+                                            dr.interval_mins = t.interval_mins;
+                                            if dr.name.trim().is_empty() { dr.name = t.name.to_string(); }
+                                            let filled = dr.clone();
+                                            drop(dr);
+                                            let rev = form.peek().0 + 1;
+                                            form.set((rev, filled));
+                                        }
+                                    },
+                                    option { value: "", selected: true, "Start from a template…" }
+                                    for t in TEMPLATES { option { value: t.key, "{t.label}" } }
+                                }
+                            }
+                        }
+                        label { "Script"
+                            textarea {
+                                class: "code",
+                                spellcheck: false,
+                                rows: 24,
+                                initial_value: "{f.script}",
+                                oninput: move |e| { draft.write().script = e.value(); flash.set(None); },
+                            }
+                        }
+                        if !is_new && d.script != saved().script {
+                            p { class: "muted small", "Saving a changed script resets this interest's baseline: the next run records the current state without reporting updates." }
+                        }
+                        if !is_new {
+                            div { class: "danger-zone",
+                                if confirm_delete() {
+                                    span { class: "small", "Delete this interest and its history?" }
+                                    button { class: "btn btn-small btn-danger",
+                                        onclick: move |_| { delete_interest(&draft().id); nav.push(Route::Interests {}); },
+                                        "Delete" }
+                                    button { class: "btn btn-small", onclick: move |_| confirm_delete.set(false), "Cancel" }
+                                } else {
+                                    button { class: "btn btn-small", onclick: move |_| confirm_delete.set(true), "Delete interest" }
+                                }
                             }
                         }
                     }
