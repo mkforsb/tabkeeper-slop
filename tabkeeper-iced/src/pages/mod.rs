@@ -16,7 +16,7 @@ use crate::{App, Message, Route};
 pub enum Page {
     Dashboard,
     /// `confirm_delete`: the interest whose Delete button was clicked.
-    Interests { confirm_delete: Option<String> },
+    Interests { confirm_delete: Option<String>, drag: Option<interests::Drag> },
     Editor(Box<editor::Editor>),
     NotFound,
     /// `shown`: how many events are listed.
@@ -29,7 +29,7 @@ impl Page {
     pub fn open(app: &App, route: Route) -> Page {
         match route {
             Route::Dashboard => Page::Dashboard,
-            Route::Interests => Page::Interests { confirm_delete: None },
+            Route::Interests => Page::Interests { confirm_delete: None, drag: None },
             Route::Editor(id) => editor::Editor::open(app, &id).map(|e| Page::Editor(Box::new(e))).unwrap_or(Page::NotFound),
             Route::Updates => Page::Updates { confirm_clear: false, shown: updates::PAGE_SIZE },
             Route::Stats => Page::Stats,
@@ -53,7 +53,7 @@ impl Page {
 pub fn view(app: &App) -> Element<'_> {
     match &app.page {
         Page::Dashboard => dashboard::view(app),
-        Page::Interests { confirm_delete } => interests::view(app, confirm_delete.as_deref()),
+        Page::Interests { confirm_delete, drag } => interests::view(app, confirm_delete.as_deref(), drag.as_ref()),
         Page::Editor(e) => editor::view(app, e),
         Page::NotFound => panel(
             column![h2("Interest not found"), btn("Back to interests", Some(Message::Navigate(Route::Interests)))].spacing(12),

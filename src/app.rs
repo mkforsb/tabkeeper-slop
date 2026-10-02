@@ -39,6 +39,14 @@ pub fn upsert_interest(list: &mut Vec<Interest>, states: &mut HashMap<String, In
     }
 }
 
+/// Moves interest `id` to position `to` (clamped to the list). The list's
+/// order is also the dashboard's.
+pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
+    let Some(from) = list.iter().position(|i| i.id == id) else { return };
+    let interest = list.remove(from);
+    list.insert(to.min(list.len()), interest);
+}
+
 /// The example interests offered on an empty dashboard.
 pub fn example_interests() -> Vec<Interest> {
     let examples = ["youtube", "soundcloud-tracks", "soundcloud-bio", "instagram", "biorio", "bioaspen", "slakthuset"];
@@ -162,4 +170,23 @@ pub fn fmt_item_date(s: &str) -> String {
         .or_else(|_| DateTime::parse_from_rfc2822(s.trim()))
         .map(|d| d.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string())
         .unwrap_or_else(|_| s.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn move_interest_reorders() {
+        let ids = |list: &[Interest]| list.iter().map(|i| i.id.clone()).collect::<Vec<_>>().join("");
+        let mut list: Vec<Interest> = "abcd".chars().map(|c| Interest { id: c.into(), ..Default::default() }).collect();
+        move_interest(&mut list, "a", 2);
+        assert_eq!(ids(&list), "bcad");
+        move_interest(&mut list, "d", 0);
+        assert_eq!(ids(&list), "dbca");
+        move_interest(&mut list, "b", 99);
+        assert_eq!(ids(&list), "dcab");
+        move_interest(&mut list, "missing", 0);
+        assert_eq!(ids(&list), "dcab");
+    }
 }

@@ -1,5 +1,5 @@
-use iced::widget::{checkbox, column, container, row, text, Column};
-use iced::{alignment, Center, Fill, Length};
+use iced::widget::{checkbox, column, container, mouse_area, row, rule, text, Column};
+use iced::{alignment, mouse, Center, Fill, Length};
 use tabkeeper::app::fmt_count;
 use tabkeeper::model::Interest;
 
@@ -7,7 +7,15 @@ use crate::style;
 use crate::widgets::*;
 use crate::{App, Message, Route};
 
-pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>) -> Element<'a> {
+/// An interest being dragged to a new position.
+#[derive(Debug, Clone)]
+pub struct Drag {
+    pub id: String,
+    /// The row under the cursor, where the interest will be moved to.
+    pub over: Option<usize>,
+}
+
+pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>, drag: Option<&Drag>) -> Element<'a> {
     let head = page_head("Interests", vec![btn_primary("+ New interest", Some(Message::Navigate(Route::Editor("new".into())))).into()]);
     if app.interests.is_empty() {
         let empty = panel(
@@ -21,6 +29,7 @@ pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>) -> Element<'a> {
 
     let header = cells([
         text("").into(),
+        text("").into(),
         muted("Name").into(),
         muted("Status").into(),
         muted("Every").into(),
@@ -30,14 +39,43 @@ pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>) -> Element<'a> {
         muted("Enabled").into(),
         text("").into(),
     ]);
+    // While dragging, the separator at the drop position is drawn in the
+    // accent color: above the target row when moving up, below it when moving down.
+    let from = drag.and_then(|d| app.interests.iter().position(|i| i.id == d.id));
+    let marker = match (from, drag.and_then(|d| d.over)) {
+        (Some(from), Some(to)) if to < from => Some(to),
+        (Some(from), Some(to)) if to > from => Some(to + 1),
+        _ => None,
+    };
+    let separator = |k: usize| -> Element<'a> {
+        if marker == Some(k) {
+            rule::horizontal(2).style(style::drop_marker).into()
+        } else {
+            hr()
+        }
+    };
+
     let mut rows = Column::new().push(header);
-    for i in &app.interests {
-        rows = rows.push(hr()).push(table_row(app, i, confirm_delete == Some(i.id.as_str())));
+    for (k, i) in app.interests.iter().enumerate() {
+        let r = table_row(app, i, confirm_delete == Some(i.id.as_str()));
+        let r: Element = if from == Some(k) { container(r).style(style::fresh).into() } else { r };
+        rows = rows.push(separator(k)).push(mouse_area(r).on_enter(Message::DragOver(Some(k))));
     }
-    column![head, panel(rows)].spacing(18).into()
+    if marker == Some(app.interests.len()) {
+        rows = rows.push(separator(app.interests.len()));
+    }
+
+    let table: Element = if drag.is_some() {
+        // Releasing outside the table cancels the drag.
+        mouse_area(rows).on_exit(Message::DragOver(None)).interaction(mouse::Interaction::Grabbing).into()
+    } else {
+        rows.into()
+    };
+    column![head, panel(table), muted("Drag ⠿ to reorder. The dashboard shows interests in this order.")].spacing(18).into()
 }
 
-const WIDTHS: [Length; 9] = [
+const WIDTHS: [Length; 10] = [
+    Length::Fixed(14.0),
     Length::Fixed(40.0),
     Length::FillPortion(3),
     Length::Fixed(120.0),
@@ -46,11 +84,11 @@ const WIDTHS: [Length; 9] = [
     Length::Fixed(70.0),
     Length::Fixed(70.0),
     Length::Fixed(70.0),
-    Length::Fixed(240.0),
+    Length::Fixed(220.0),
 ];
 
 /// Lays out one table row with the column widths above.
-fn cells<'a>(cells: [Element<'a>; 9]) -> Element<'a> {
+fn cells<'a>(cells: [Element<'a>; 10]) -> Element<'a> {
     row(cells.into_iter().zip(WIDTHS).map(|(c, w)| container(c).width(w).into())).spacing(10).align_y(Center).padding([7, 4]).into()
 }
 
@@ -76,7 +114,12 @@ fn table_row<'a>(app: &'a App, interest: &'a Interest, confirming: bool) -> Elem
         actions.push(btn_small("Delete", Some(Message::ConfirmDelete(Some(id.clone())))))
     };
 
+    let grip = mouse_area(text("⠿").size(18).style(style::ink_2))
+        .on_press(Message::DragStart(id.clone()))
+        .interaction(mouse::Interaction::Grab);
+
     cells([
+        grip.into(),
         avatar(app, &display_image(app, interest), &interest.name, 28.0),
         column![link(text(interest.name.as_str()), Route::Editor(id.clone())), timing(app, interest)].spacing(2).into(),
         status_pill(app, interest),

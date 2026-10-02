@@ -205,6 +205,11 @@ pub fn fresh(theme: &Theme) -> container::Style {
     container::Style { background: Some(colors(theme).accent_soft.into()), border: border::rounded(7), ..Default::default() }
 }
 
+/// Where a dragged row will land.
+pub fn drop_marker(theme: &Theme) -> rule::Style {
+    rule::Style { color: colors(theme).accent, radius: 1.0.into(), fill_mode: rule::FillMode::Full, snap: true }
+}
+
 pub fn rule(theme: &Theme) -> rule::Style {
     rule::Style { color: colors(theme).border, radius: 0.0.into(), fill_mode: rule::FillMode::Full, snap: true }
 }

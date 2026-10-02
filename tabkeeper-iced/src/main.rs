@@ -78,6 +78,10 @@ pub enum Message {
     AddExamples,
     SetEnabled(String, bool),
     ConfirmDelete(Option<String>),
+    /// Reordering on the Interests page.
+    DragStart(String),
+    DragOver(Option<usize>),
+    DragEnd,
     Delete(String),
     ConfirmClear(bool),
     ClearEvents,
@@ -131,6 +135,10 @@ pub struct App {
     window_width: f32,
 }
 
+fn drag_release(event: iced::Event, _: iced::event::Status, _: window::Id) -> Option<Message> {
+    matches!(event, iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left))).then_some(Message::DragEnd)
+}
+
 static NO_STATE: LazyLock<InterestState> = LazyLock::new(InterestState::default);
 
 impl App {
@@ -172,10 +180,13 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
+        let dragging = matches!(self.page, Page::Interests { drag: Some(_), .. });
         Subscription::batch([
             iced::time::every(Duration::from_millis(TICK_MS)).map(|_| Message::Tick),
             iced::system::theme_changes().map(Message::ThemeChanged),
             window::resize_events().map(|(_, size)| Message::Resized(size)),
+            // The drop happens wherever the button is released.
+            if dragging { iced::event::listen_with(drag_release) } else { Subscription::none() },
         ])
     }
 
@@ -232,8 +243,26 @@ impl App {
                 }
             }
             Message::ConfirmDelete(id) => {
-                if let Page::Interests { confirm_delete } = &mut self.page {
+                if let Page::Interests { confirm_delete, .. } = &mut self.page {
                     *confirm_delete = id;
+                }
+            }
+            Message::DragStart(id) => {
+                if let Page::Interests { drag, .. } = &mut self.page {
+                    *drag = Some(pages::interests::Drag { id, over: None });
+                }
+            }
+            Message::DragOver(row) => {
+                if let Page::Interests { drag: Some(d), .. } = &mut self.page {
+                    d.over = row;
+                }
+            }
+            Message::DragEnd => {
+                if let Page::Interests { drag, .. } = &mut self.page {
+                    if let Some(pages::interests::Drag { id, over: Some(to) }) = drag.take() {
+                        app::move_interest(&mut self.interests, &id, to);
+                        self.dirty.interests = true;
+                    }
                 }
             }
             Message::Delete(id) => self.delete_interest(&id),
