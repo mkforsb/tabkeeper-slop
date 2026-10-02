@@ -1,0 +1,167 @@
+use dioxus::prelude::*;
+use tabkeeper::model::{now_ms, Interest};
+use tabkeeper::templates::TEMPLATES;
+
+use super::components::*;
+use super::state::*;
+use super::worker::start_run;
+use super::{fmt_ago, fmt_count, Route};
+
+#[component]
+pub fn Dashboard() -> Element {
+    let interests = INTERESTS();
+    let events = EVENTS.read().iter().take(8).cloned().collect::<Vec<_>>();
+    let now = NOW();
+    let day_ago = now - 86_400_000;
+    let updates_24h = EVENTS.read().iter().filter(|e| e.at >= day_ago).count() as u64;
+    let failing = {
+        let states = STATES.read();
+        interests.iter().filter(|i| i.enabled && states.get(&i.id).is_some_and(|s| s.last_error.is_some())).count() as u64
+    };
+    let enabled = interests.iter().filter(|i| i.enabled).count() as u64;
+    let sys = SYSTEM();
+    let (has_interests, total) = (!interests.is_empty(), interests.len());
+
+    rsx! {
+        div { class: "page-head",
+            h1 { "Dashboard" }
+            div { class: "actions",
+                button {
+                    class: "btn",
+                    disabled: !has_interests,
+                    onclick: move |_| for i in INTERESTS.read().iter().filter(|i| i.enabled) { start_run(i.id.clone()) },
+                    "Refresh all"
+                }
+                Link { class: "btn btn-primary", to: Route::Editor { id: "new".into() }, "+ New interest" }
+            }
+        }
+
+        div { class: "tiles",
+            Tile { label: "Interests watched", value: fmt_count(enabled), sub: format!("{total} total") }
+            Tile { label: "Updates in last 24h", value: fmt_count(updates_24h), sub: format!("{} unread", unread_count(None)) }
+            Tile { label: "Refreshes", value: fmt_count(sys.refreshes), sub: format!("{} failed", fmt_count(sys.failures)) }
+            Tile {
+                label: "Failing now",
+                value: fmt_count(failing),
+                sub: if failing > 0 { "✕ needs attention".to_string() } else { "✓ all healthy".to_string() },
+            }
+        }
+
+        if !has_interests {
+            EmptyState {}
+        } else {
+            div { class: "dash",
+                div { class: "cards",
+                    for i in interests { InterestCard { key: "{i.id}", interest: i.clone() } }
+                }
+                aside { class: "feed panel",
+                    div { class: "panel-head",
+                        h2 { "Recent updates" }
+                        Link { class: "small", to: Route::Updates {}, "All →" }
+                    }
+                    if events.is_empty() {
+                        p { class: "muted small", "Nothing caught yet. The first refresh of an interest records a baseline; changes after that show up here." }
+                    }
+                    for e in events {
+                        div { key: "{e.id}", class: if e.read { "feed-item" } else { "feed-item unread" },
+                            div { class: "feed-meta",
+                                Link { to: Route::Editor { id: e.interest_id.clone() }, "{e.interest_name}" }
+                                span { class: "muted small", "{fmt_ago(Some(e.at), now)}" }
+                            }
+                            div { class: "small", "{e.summary}" }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn Tile(label: String, value: String, sub: String) -> Element {
+    rsx! {
+        div { class: "tile",
+            div { class: "tile-label", "{label}" }
+            div { class: "tile-value", "{value}" }
+            div { class: "tile-sub", "{sub}" }
+        }
+    }
+}
+
+#[component]
+fn InterestCard(interest: Interest) -> Element {
+    let st = STATES.read().get(&interest.id).cloned().unwrap_or_default();
+    let unread = unread_count(Some(&interest.id));
+    let image = display_image(&interest);
+    let id = interest.id.clone();
+    let id2 = interest.id.clone();
+    let running = RUNNING.read().contains(&interest.id);
+
+    rsx! {
+        article { class: if interest.enabled { "card" } else { "card disabled" },
+            header { class: "card-head",
+                Avatar { src: image, name: interest.name.clone() }
+                div { class: "card-title",
+                    Link { to: Route::Editor { id: interest.id.clone() }, h3 { "{interest.name}" } }
+                    Timing { interest: interest.clone() }
+                }
+                if unread > 0 {
+                    button {
+                        class: "badge",
+                        title: "Mark as read",
+                        onclick: move |_| mark_read(Some(&id2)),
+                        "{unread} new"
+                    }
+                }
+            }
+            div { class: "card-body",
+                if let Some(err) = &st.last_error {
+                    div { class: "error-box small", "✕ {err}" }
+                }
+                match &st.last_output {
+                    Some(out) => rsx! { OutputView { output: out.clone(), limit: 4, show_image: false } },
+                    None if running => rsx! { p { class: "muted small", "Running for the first time…" } },
+                    None if st.last_error.is_none() => rsx! { p { class: "muted small", "Not checked yet." } },
+                    None => rsx! {},
+                }
+            }
+            footer { class: "card-foot",
+                StatusPill { interest: interest.clone() }
+                div { class: "actions",
+                    button { class: "btn btn-small", disabled: running, onclick: move |_| start_run(id.clone()), "Refresh" }
+                    Link { class: "btn btn-small", to: Route::Editor { id: interest.id.clone() }, "Edit" }
+                }
+            }
+        }
+    }
+}
+
+#[component]
+fn EmptyState() -> Element {
+    rsx! {
+        div { class: "empty panel",
+            h2 { "Nothing to keep tabs on yet" }
+            p { "An interest is a script that fetches a page and extracts what matters. Tabkeeper runs it periodically and tells you when something new shows up." }
+            div { class: "actions",
+                Link { class: "btn btn-primary", to: Route::Editor { id: "new".into() }, "Create an interest" }
+                button { class: "btn", onclick: move |_| add_examples(), "Add the example interests" }
+            }
+        }
+    }
+}
+
+pub fn add_examples() {
+    let examples = ["youtube", "soundcloud-tracks", "soundcloud-bio", "instagram", "biorio", "bioaspen", "slakthuset"];
+    for key in examples {
+        let Some(t) = TEMPLATES.iter().find(|t| t.key == key) else { continue };
+        upsert_interest(Interest {
+            name: t.name.into(),
+            script: t.script.into(),
+            interval_mins: t.interval_mins,
+            // Instagram needs a session cookie pasted into its script first.
+            enabled: key != "instagram",
+            created_at: now_ms(),
+            ..Default::default()
+        });
+    }
+}
