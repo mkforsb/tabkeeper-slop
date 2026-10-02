@@ -2,7 +2,7 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn send(title: String, body: String) -> Result<(), String> {
-    tabkeeper::platform::run_blocking(move || {
+    crate::platform::run_blocking(move || {
         notify_rust::Notification::new()
             .appname("Tabkeeper")
             .summary(&title)

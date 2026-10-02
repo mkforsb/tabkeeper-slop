@@ -4,6 +4,8 @@
 use std::collections::{HashMap, HashSet};
 
 use dioxus::prelude::*;
+use tabkeeper::app::Backup;
+use tabkeeper::app;
 use tabkeeper::model::*;
 use tabkeeper::storage;
 
@@ -44,24 +46,9 @@ pub fn interest(id: &str) -> Option<Interest> {
     INTERESTS.read().iter().find(|i| i.id == id).cloned()
 }
 
+/// Inserts or replaces an interest; a changed script re-baselines its state.
 pub fn upsert_interest(updated: Interest) {
-    let mut list = INTERESTS.write();
-    match list.iter_mut().find(|i| i.id == updated.id) {
-        Some(existing) => {
-            if existing.script != updated.script {
-                // A different script may produce different item ids; re-baseline
-                // instead of reporting everything as new, and run it right away.
-                if let Some(st) = STATES.write().get_mut(&updated.id) {
-                    st.last_output = None;
-                    st.seen_ids.clear();
-                    st.last_run_at = None;
-                    st.fail_streak = 0;
-                }
-            }
-            *existing = updated;
-        }
-        None => list.push(updated),
-    }
+    app::upsert_interest(&mut INTERESTS.write(), &mut STATES.write(), updated);
 }
 
 pub fn delete_interest(id: &str) {
@@ -79,17 +66,6 @@ pub fn mark_read(interest_id: Option<&str>) {
     for e in events.iter_mut().filter(|e| interest_id.is_none_or(|id| e.interest_id == id)) {
         e.read = true;
     }
-}
-
-/// Everything persisted, for export/import.
-#[derive(serde::Serialize, serde::Deserialize, Default)]
-#[serde(default)]
-pub struct Backup {
-    pub interests: Vec<Interest>,
-    pub states: HashMap<String, InterestState>,
-    pub events: Vec<UpdateEvent>,
-    pub settings: Settings,
-    pub system: SystemStats,
 }
 
 pub fn export_json() -> String {

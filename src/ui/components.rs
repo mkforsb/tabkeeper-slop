@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use tabkeeper::app::fmt_item_date;
 use tabkeeper::engine;
 use tabkeeper::model::{Interest, Item, Output};
 
@@ -113,14 +114,4 @@ pub fn OutputView(output: Output, #[props(default = usize::MAX)] limit: usize, #
             if hidden > 0 { div { class: "muted small more", "+ {hidden} more" } }
         }
     }
-}
-
-/// Machine-readable dates (RFC 3339 / RFC 2822, as feeds use) in local time;
-/// anything else is shown as the script wrote it.
-fn fmt_item_date(s: &str) -> String {
-    use chrono::{DateTime, Local};
-    DateTime::parse_from_rfc3339(s.trim())
-        .or_else(|_| DateTime::parse_from_rfc2822(s.trim()))
-        .map(|d| d.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string())
-        .unwrap_or_else(|_| s.to_string())
 }

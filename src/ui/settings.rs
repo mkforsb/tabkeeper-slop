@@ -8,7 +8,7 @@ pub fn SettingsPage() -> Element {
     let mut export = use_signal(String::new);
     let mut import = use_signal(String::new);
     let mut message = use_signal(|| None::<String>);
-    let mut permission = use_signal(crate::notify::permission);
+    let mut permission = use_signal(tabkeeper::notify::permission);
     let mut confirm_reset = use_signal(|| false);
     let is_web = cfg!(target_arch = "wasm32");
     // Text fields are uncontrolled (see the editor); bump to refill them from state.
@@ -61,7 +61,7 @@ pub fn SettingsPage() -> Element {
                         span { class: "small muted", "Browser permission: {permission}" }
                         button { class: "btn btn-small",
                             onclick: move |_| async move {
-                                match crate::notify::request_permission().await {
+                                match tabkeeper::notify::request_permission().await {
                                     Ok(p) => permission.set(p),
                                     Err(e) => message.set(Some(e)),
                                 }
@@ -71,7 +71,7 @@ pub fn SettingsPage() -> Element {
                     }
                     button { class: "btn btn-small",
                         onclick: move |_| async move {
-                            let r = crate::notify::send("Tabkeeper".into(), "Notifications are working.".into()).await;
+                            let r = tabkeeper::notify::send("Tabkeeper".into(), "Notifications are working.".into()).await;
                             message.set(Some(match r { Ok(()) => "Test notification sent.".into(), Err(e) => format!("Notification failed: {e}") }));
                         },
                         "Send test notification"

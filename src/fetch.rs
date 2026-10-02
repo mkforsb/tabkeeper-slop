@@ -93,6 +93,19 @@ async fn fetch_inner(req: &FetchRequest, cors_proxy: &str) -> Result<FetchRespon
     Ok(FetchResponse { status, body })
 }
 
+/// Downloads binary content (images for the UI), with the same client and size cap as scripts.
+pub async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
+    let resp = client().get(url).send().await.map_err(|e| describe_error(&e))?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP {}", resp.status().as_u16()));
+    }
+    let bytes = resp.bytes().await.map_err(|e| describe_error(&e))?;
+    if bytes.len() > MAX_BODY {
+        return Err("response too large".into());
+    }
+    Ok(bytes.to_vec())
+}
+
 fn describe_error(e: &reqwest::Error) -> String {
     #[cfg(target_arch = "wasm32")]
     if e.is_request() {

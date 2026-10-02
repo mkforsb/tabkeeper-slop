@@ -5,8 +5,18 @@ edition = "2021"
 description = "Keep tabs on interesting things on the internet"
 license = "MIT"
 
+[workspace]
+members = [".", "tabkeeper-iced"]
+
+# The Dioxus app. `dioxus` is enabled by the `desktop`/`web` features (which
+# `dx` selects per platform), so the Iced front end doesn't compile it.
+[[bin]]
+name = "tabkeeper"
+path = "src/main.rs"
+required-features = ["dioxus"]
+
 [dependencies]
-dioxus = { version = "0.7", features = ["router"] }
+dioxus = { version = "0.7", features = ["router"], optional = true }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = "1"
 rhai = { version = "1", features = ["serde", "no_custom_syntax"] }

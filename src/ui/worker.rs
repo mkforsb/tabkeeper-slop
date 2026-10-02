@@ -3,7 +3,7 @@
 //! where it only runs while the tab is open.
 
 use dioxus::prelude::*;
-use tabkeeper::engine;
+use tabkeeper::{app, engine};
 use tabkeeper::model::now_ms;
 use tabkeeper::platform::sleep_ms;
 use tabkeeper::script::{self, RunInput};
@@ -28,24 +28,8 @@ fn tick() {
     if settings.paused {
         return;
     }
-    let now = now_ms();
-    let running = RUNNING.read().clone();
-    let slots = (settings.concurrency.max(1) as usize).saturating_sub(running.len());
-    if slots == 0 {
-        return;
-    }
-    let mut due: Vec<(i64, String)> = {
-        let states = STATES.read();
-        INTERESTS
-            .read()
-            .iter()
-            .filter(|i| i.enabled && !running.contains(&i.id))
-            .map(|i| (engine::next_due(i, &states.get(&i.id).cloned().unwrap_or_default()), i.id.clone()))
-            .filter(|(at, _)| *at <= now)
-            .collect()
-    };
-    due.sort();
-    for (_, id) in due.into_iter().take(slots) {
+    let due = app::due_interests(&INTERESTS.read(), &STATES.read(), &RUNNING.read(), settings.concurrency, now_ms());
+    for id in due {
         start_run(id);
     }
 }
@@ -85,7 +69,7 @@ async fn run_interest(id: String) {
         events.truncate(settings.max_events.max(10) as usize);
     }
     if settings.notifications && current.notify {
-        let result = crate::notify::send(current.name.clone(), event.summary.clone()).await;
+        let result = tabkeeper::notify::send(current.name.clone(), event.summary.clone()).await;
         *NOTIFY_ERROR.write() = result.err();
     }
 }

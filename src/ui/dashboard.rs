@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use tabkeeper::model::{now_ms, Interest};
-use tabkeeper::templates::TEMPLATES;
+use tabkeeper::app;
+use tabkeeper::model::Interest;
 
 use super::components::*;
 use super::state::*;
@@ -151,17 +151,7 @@ fn EmptyState() -> Element {
 }
 
 pub fn add_examples() {
-    let examples = ["youtube", "soundcloud-tracks", "soundcloud-bio", "instagram", "biorio", "bioaspen", "slakthuset"];
-    for key in examples {
-        let Some(t) = TEMPLATES.iter().find(|t| t.key == key) else { continue };
-        upsert_interest(Interest {
-            name: t.name.into(),
-            script: t.script.into(),
-            interval_mins: t.interval_mins,
-            // Instagram needs a session cookie pasted into its script first.
-            enabled: key != "instagram",
-            created_at: now_ms(),
-            ..Default::default()
-        });
+    for i in app::example_interests() {
+        upsert_interest(i);
     }
 }

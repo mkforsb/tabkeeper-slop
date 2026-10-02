@@ -1,0 +1,13 @@
+[package]
+name = "tabkeeper-iced"
+version = "0.1.0"
+edition = "2021"
+description = "Tabkeeper desktop app built with Iced"
+license = "MIT"
+
+[dependencies]
+tabkeeper = { path = ".." }
+iced = { version = "0.14", features = ["tokio", "image", "highlighter", "advanced"] }
+open = "5"
+serde = "1"
+serde_json = "1"

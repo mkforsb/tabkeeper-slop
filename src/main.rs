@@ -1,4 +1,3 @@
-mod notify;
 mod ui;
 
 fn main() {

@@ -13,6 +13,7 @@ pub mod html;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use rhai::{Array, Dynamic, Engine, EvalAltResult, Map, Scope};
 
@@ -50,7 +51,8 @@ pub async fn run(input: RunInput) -> RunReport {
     let mut cache = FetchCache::new();
     let mut fetches = Vec::new();
     let mut rounds = 0;
-    let script: Rc<str> = input.script.into();
+    // Arc, not Rc: the Iced app needs this future to be Send.
+    let script: Arc<str> = input.script.into();
     let prev_json = input.prev.as_ref().map(|p| serde_json::to_value(p).unwrap_or_default());
 
     let (result, logs) = loop {
