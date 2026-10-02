@@ -104,8 +104,8 @@ pub fn apply_run(
         .fetches
         .iter()
         .map(|f| match (&f.error, f.status) {
-            (Some(e), _) => format!("GET {} → error: {e} ({} ms)", f.url, f.ms),
-            (None, s) => format!("GET {} → {} ({} bytes, {} ms)", f.url, s.unwrap_or(0), f.bytes, f.ms),
+            (Some(e), _) => format!("{} {} → error: {e} ({} ms)", f.method, f.url, f.ms),
+            (None, s) => format!("{} {} → {} ({} bytes, {} ms)", f.method, f.url, s.unwrap_or(0), f.bytes, f.ms),
         })
         .collect();
     logs.extend(report.logs.iter().cloned());

@@ -7,8 +7,17 @@ use std::sync::{Arc, OnceLock};
 /// A request a script asked for. Also used as the replay cache key.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FetchRequest {
+    /// Uppercase HTTP method, e.g. "GET" or "POST".
+    pub method: String,
     pub url: String,
     pub headers: BTreeMap<String, String>,
+    pub body: Option<String>,
+}
+
+impl FetchRequest {
+    pub fn get(url: impl Into<String>) -> Self {
+        FetchRequest { method: "GET".into(), url: url.into(), headers: Default::default(), body: None }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -19,11 +28,19 @@ pub struct FetchResponse {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FetchLog {
+    pub method: String,
     pub url: String,
     pub status: Option<u16>,
     pub bytes: usize,
     pub ms: u64,
     pub error: Option<String>,
+}
+
+impl FetchLog {
+    /// The URL, prefixed with the method unless it's a plain GET.
+    pub fn label(&self) -> String {
+        if self.method == "GET" { self.url.clone() } else { format!("{} {}", self.method, self.url) }
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -63,6 +80,7 @@ pub async fn fetch(req: &FetchRequest, cors_proxy: &str) -> (Result<FetchRespons
     let start = crate::platform::Instant::now();
     let res = fetch_inner(req, cors_proxy).await;
     let log = FetchLog {
+        method: req.method.clone(),
         url: req.url.clone(),
         status: res.as_ref().ok().map(|r| r.status),
         bytes: res.as_ref().map(|r| r.body.len()).unwrap_or(0),
@@ -81,9 +99,13 @@ async fn fetch_inner(req: &FetchRequest, cors_proxy: &str) -> Result<FetchRespon
         req.url.clone()
     };
 
-    let mut rb = client().get(&url);
+    let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|_| format!("invalid HTTP method '{}'", req.method))?;
+    let mut rb = client().request(method, &url);
     for (k, v) in &req.headers {
         rb = rb.header(k, v);
+    }
+    if let Some(body) = &req.body {
+        rb = rb.body(body.clone());
     }
     let resp = rb.send().await.map_err(|e| describe_error(&e))?;
     let status = resp.status().as_u16();

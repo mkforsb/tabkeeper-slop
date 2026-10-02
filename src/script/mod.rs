@@ -145,7 +145,7 @@ fn build_engine(cache: Rc<FetchCache>, pending: Rc<RefCell<BTreeSet<FetchRequest
     }
     engine.register_fn("log", move |v: Dynamic| push_log(display(&v)));
 
-    // fetch(url), fetch(url, #{ headers: #{...}, allow_error: true })
+    // fetch(url), fetch(url, #{ method: "POST", body: ..., headers: #{...}, allow_error: true })
     let do_fetch = move |url: &str, opts: Map| -> Result<String, Box<EvalAltResult>> {
         let mut headers = BTreeMap::new();
         if let Some(h) = opts.get("headers").and_then(|h| h.read_lock::<Map>().map(|m| m.clone())) {
@@ -154,11 +154,27 @@ fn build_engine(cache: Rc<FetchCache>, pending: Rc<RefCell<BTreeSet<FetchRequest
             }
         }
         let allow_error = opts.get("allow_error").and_then(|v| v.as_bool().ok()).unwrap_or(false);
-        let req = FetchRequest { url: url.to_string(), headers };
+        let method = opts.get("method").map(display).filter(|m| !m.is_empty()).unwrap_or_else(|| "GET".into()).to_ascii_uppercase();
+        if !method.bytes().all(|b| b.is_ascii_alphabetic()) {
+            return Err(format!("invalid HTTP method '{method}'").into());
+        }
+        // A string body is sent as-is; a map or array is sent as JSON.
+        let body = match opts.get("body").filter(|b| !b.is_unit()) {
+            None => None,
+            Some(b) if b.is_map() || b.is_array() => {
+                if !headers.keys().any(|k| k.eq_ignore_ascii_case("content-type")) {
+                    headers.insert("Content-Type".into(), "application/json".into());
+                }
+                Some(serde_json::to_string(b).map_err(|e| format!("body: {e}"))?)
+            }
+            Some(b) => Some(display(b)),
+        };
+        let req = FetchRequest { method, url: url.to_string(), headers, body };
+        let what = req.method.clone() + " " + url;
         match cache.get(&req) {
             Some(Ok(resp)) if allow_error || (200..300).contains(&resp.status) => Ok(resp.body.to_string()),
-            Some(Ok(resp)) => Err(format!("HTTP {} fetching {url}", resp.status).into()),
-            Some(Err(e)) => Err(format!("fetching {url}: {e}").into()),
+            Some(Ok(resp)) => Err(format!("HTTP {} fetching {what}", resp.status).into()),
+            Some(Err(e)) => Err(format!("fetching {what}: {e}").into()),
             None => {
                 url::Url::parse(url).map_err(|e| format!("invalid URL '{url}': {e}"))?;
                 pending.borrow_mut().insert(req);
@@ -325,6 +341,7 @@ pub fn to_output(v: Dynamic) -> Result<Output, String> {
 /// Reference for the editor's help panel.
 pub const API_HELP: &[(&str, &str)] = &[
     ("fetch(url) / fetch(url, #{ headers: #{..}, allow_error: true })", "GET a URL, returns the body as a string. Throws on non-2xx unless allow_error."),
+    ("fetch(url, #{ method: \"POST\", body: .. })", "Other methods. A string body is sent as-is; a map or array is sent as JSON (with Content-Type: application/json unless set)."),
     ("fetch_json(url[, opts])", "fetch() + parse_json()."),
     ("html(str)", "Parse HTML into a node. <noscript> content is parsed as markup."),
     ("node.select(css) / node.select_one(css)", "CSS selection. select_one returns () if nothing matches."),
@@ -352,7 +369,7 @@ mod tests {
 
     fn cached(url: &str, status: u16, body: &str) -> FetchCache {
         let mut c = FetchCache::new();
-        c.insert(FetchRequest { url: url.into(), headers: Default::default() }, Ok(FetchResponse { status, body: body.into() }));
+        c.insert(FetchRequest::get(url), Ok(FetchResponse { status, body: body.into() }));
         c
     }
 
@@ -403,6 +420,27 @@ mod tests {
         let c = cached("https://e.test/", 404, "nope");
         assert!(eval(r#"fetch("https://e.test/")"#, c.clone()).0.unwrap_err().contains("HTTP 404"));
         assert_eq!(eval(r#"fetch("https://e.test/", #{ allow_error: true })"#, c).0.unwrap().text, "nope");
+    }
+
+    #[test]
+    fn post_requests() {
+        let (_, pending, _) = eval(r#"fetch("https://p.test/", #{ method: "post", body: #{ q: "x" } })"#, Default::default());
+        let req = pending.into_iter().next().unwrap();
+        assert_eq!(req.method, "POST");
+        assert_eq!(req.body.as_deref(), Some(r#"{"q":"x"}"#));
+        assert_eq!(req.headers["Content-Type"], "application/json");
+
+        // A string body is sent verbatim and an explicit content type is kept.
+        let script = r#"fetch("https://p.test/", #{ method: "POST", body: "a=1", headers: #{ "content-type": "application/x-www-form-urlencoded" } })"#;
+        let req = eval(script, Default::default()).1.into_iter().next().unwrap();
+        assert_eq!(req.body.as_deref(), Some("a=1"));
+        assert_eq!(req.headers.len(), 1);
+
+        // A POST's response is cached separately from a GET to the same URL.
+        let mut c = cached("https://p.test/", 200, "got");
+        c.insert(req, Ok(FetchResponse { status: 200, body: "posted".into() }));
+        assert_eq!(eval(script, c.clone()).0.unwrap().text, "posted");
+        assert_eq!(eval(r#"fetch("https://p.test/")"#, c).0.unwrap().text, "got");
     }
 
     #[test]

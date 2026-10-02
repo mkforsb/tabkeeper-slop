@@ -96,7 +96,7 @@ pub fn run_log(report: &RunReport) -> Vec<String> {
     let mut lines: Vec<String> = report
         .fetches
         .iter()
-        .map(|f| format!("GET {} -> {:?} {} bytes {} ms {}", f.url, f.status, f.bytes, f.ms, f.error.clone().unwrap_or_default()))
+        .map(|f| format!("{} {} -> {:?} {} bytes {} ms {}", f.method, f.url, f.status, f.bytes, f.ms, f.error.clone().unwrap_or_default()))
         .collect();
     lines.extend(report.logs.iter().map(|l| format!("log: {l}")));
     lines.push(format!("{} rounds, {} ms", report.rounds, report.duration_ms));

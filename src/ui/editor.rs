@@ -288,9 +288,9 @@ fn TestResult(report: RunReport, interest_id: String) -> Element {
                     for f in report.fetches.iter() {
                         li {
                             match (&f.error, f.status) {
-                                (Some(e), _) => rsx! { span { class: "status status-critical", "✕" } " {f.url} — {e}" },
-                                (None, Some(s)) if (200..300).contains(&s) => rsx! { span { class: "status status-good", "✓ {s}" } " {f.url} · {fmt_bytes(f.bytes as u64)} · {f.ms} ms" },
-                                (None, s) => rsx! { span { class: "status status-warning", "! {s.unwrap_or(0)}" } " {f.url} · {f.ms} ms" },
+                                (Some(e), _) => rsx! { span { class: "status status-critical", "✕" } " {f.label()} — {e}" },
+                                (None, Some(s)) if (200..300).contains(&s) => rsx! { span { class: "status status-good", "✓ {s}" } " {f.label()} · {fmt_bytes(f.bytes as u64)} · {f.ms} ms" },
+                                (None, s) => rsx! { span { class: "status status-warning", "! {s.unwrap_or(0)}" } " {f.label()} · {f.ms} ms" },
                             }
                         }
                     }

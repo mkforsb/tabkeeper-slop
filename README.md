@@ -92,7 +92,8 @@ when `text` changes. If the script returns `key`, only a change of `key` counts.
 Saving an edited script resets the baseline, so changing an item's id format
 doesn't flood you with "new" items.
 
-**API.** `fetch(url[, #{ headers, allow_error }])`, `fetch_json`, `html(str)`
+**API.** `fetch(url[, #{ method, body, headers, allow_error }])` (a map or
+array `body` is sent as JSON), `fetch_json`, `html(str)`
 with `select` / `select_one` / `text` / `attr` / `html` / `children` / `parent`,
 `parse_feed` (RSS/Atom), `parse_json` / `to_json`, `regex_find` /
 `regex_find_all` / `regex_test` / `regex_replace`, `between`, `url_join`,

@@ -425,11 +425,11 @@ fn test_result<'a>(app: &'a App, report: &'a RunReport, interest_id: &str) -> El
     if !report.fetches.is_empty() {
         let fetches = report.fetches.iter().map(|f| {
             let (mark, style, rest): (String, fn(&iced::Theme) -> text::Style, String) = match (&f.error, f.status) {
-                (Some(e), _) => ("✕".into(), style::critical, format!("{} — {e}", f.url)),
+                (Some(e), _) => ("✕".into(), style::critical, format!("{} — {e}", f.label())),
                 (None, Some(s)) if (200..300).contains(&s) => {
-                    (format!("✓ {s}"), style::good, format!("{} · {} · {} ms", f.url, fmt_bytes(f.bytes as u64), f.ms))
+                    (format!("✓ {s}"), style::good, format!("{} · {} · {} ms", f.label(), fmt_bytes(f.bytes as u64), f.ms))
                 }
-                (None, s) => (format!("! {}", s.unwrap_or(0)), style::warning, format!("{} · {} ms", f.url, f.ms)),
+                (None, s) => (format!("! {}", s.unwrap_or(0)), style::warning, format!("{} · {} ms", f.label(), f.ms)),
             };
             row![text(mark).size(SMALL).style(style), small(rest).wrapping(text::Wrapping::WordOrGlyph)].spacing(6).into()
         });
