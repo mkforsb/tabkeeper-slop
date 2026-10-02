@@ -154,6 +154,17 @@ pub fn error_box(theme: &Theme) -> container::Style {
     }
 }
 
+/// A Dashboard card being dragged.
+pub fn card_drag_source(theme: &Theme) -> container::Style {
+    container::Style { background: Some(colors(theme).accent_soft.into()), ..panel(theme) }
+}
+
+/// The Dashboard card a dragged card will take the place of.
+pub fn card_drop_target(theme: &Theme) -> container::Style {
+    let p = panel(theme);
+    container::Style { border: Border { color: colors(theme).accent, width: 2.0, ..p.border }, ..p }
+}
+
 /// Dims the window behind a dialog.
 pub fn backdrop(_theme: &Theme) -> container::Style {
     container::Style { background: Some(Color::BLACK.scale_alpha(0.45).into()), ..Default::default() }

@@ -21,6 +21,17 @@ pub fn Dashboard() -> Element {
     let enabled = interests.iter().filter(|i| i.enabled).count() as u64;
     let sys = SYSTEM();
     let (has_interests, total) = (!interests.is_empty(), interests.len());
+    let cards: Vec<Interest> = app::dashboard_cards(&interests, &SETTINGS.read().dashboard_order).into_iter().cloned().collect();
+    let card_ids: Vec<String> = cards.iter().map(|i| i.id.clone()).collect();
+
+    let mut drag = use_signal(|| None::<Drag>);
+    let from = drag.read().as_ref().and_then(|d| card_ids.iter().position(|id| *id == d.id));
+    let over = drag.read().as_ref().and_then(|d| d.over);
+    let card_class = move |k: usize| match (from, over) {
+        (Some(f), _) if f == k => "drag-source",
+        (Some(_), Some(o)) if o == k => "drop-target",
+        _ => "",
+    };
 
     rsx! {
         div { class: "page-head",
@@ -31,6 +42,12 @@ pub fn Dashboard() -> Element {
                     disabled: enabled == 0,
                     onclick: move |_| for i in INTERESTS.read().iter().filter(|i| i.enabled) { start_run(i.id.clone()) },
                     "Refresh all"
+                }
+                button {
+                    class: "btn",
+                    disabled: enabled < 2,
+                    onclick: move |_| app::shuffle_cards(&mut SETTINGS.write().dashboard_order, &INTERESTS.read()),
+                    "Shuffle"
                 }
                 Link { class: "btn btn-primary", to: Route::Editor { id: "new".into() }, "+ New interest" }
             }
@@ -51,14 +68,26 @@ pub fn Dashboard() -> Element {
             EmptyState {}
         } else {
             div { class: "dash",
-                div { class: "cards",
+                div {
+                    class: if drag.read().is_some() { "cards dragging" } else { "cards" },
+                    onmouseup: move |_| {
+                        if let Some(Drag { id, over: Some(to) }) = drag.take() {
+                            if let Some(target) = card_ids.get(to) {
+                                app::move_card(&mut SETTINGS.write().dashboard_order, &INTERESTS.read(), &id, target);
+                            }
+                        }
+                    },
+                    // Releasing outside the cards cancels the drag.
+                    onmouseleave: move |_| if drag.peek().is_some() { drag.set(None) },
                     if enabled == 0 {
                         div { class: "panel empty",
                             p { class: "muted", "All interests are disabled. Enable them on the " Link { to: Route::Interests {}, "Interests" } " page to see them here." }
                         }
                     }
                     // Disabled interests are only listed on the Interests page.
-                    for i in interests.into_iter().filter(|i| i.enabled) { InterestCard { key: "{i.id}", interest: i } }
+                    for (k, i) in cards.into_iter().enumerate() {
+                        InterestCard { key: "{i.id}", interest: i, index: k, drag, class: card_class(k) }
+                    }
                 }
                 aside { class: "feed panel",
                     div { class: "panel-head",
@@ -95,19 +124,35 @@ fn Tile(label: String, value: String, sub: String) -> Element {
 }
 
 #[component]
-fn InterestCard(interest: Interest) -> Element {
+fn InterestCard(interest: Interest, index: usize, drag: Signal<Option<Drag>>, class: &'static str) -> Element {
     let st = STATES.read().get(&interest.id).cloned().unwrap_or_default();
     let unread = unread_count(Some(&interest.id));
     let image = display_image(&interest);
     let id = interest.id.clone();
     let id2 = interest.id.clone();
     let id3 = interest.id.clone();
+    let id_drag = interest.id.clone();
     let reversed = interest.reverse_order;
     let running = RUNNING.read().contains(&interest.id);
 
     rsx! {
-        article { class: "card",
+        article {
+            class: "card {class}",
+            onmouseenter: move |_| {
+                if drag.peek().is_some() {
+                    if let Some(d) = drag.write().as_mut() { d.over = Some(index); }
+                }
+            },
             header { class: "card-head",
+                span {
+                    class: "grip",
+                    title: "Drag to reorder",
+                    onmousedown: move |e| {
+                        e.prevent_default();
+                        drag.set(Some(Drag { id: id_drag.clone(), over: None }));
+                    },
+                    "⠿"
+                }
                 Avatar { src: image, name: interest.name.clone() }
                 div { class: "card-title",
                     Link { to: Route::Editor { id: interest.id.clone() }, h3 { "{interest.name}" } }

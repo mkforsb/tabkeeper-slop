@@ -121,6 +121,9 @@ pub struct Settings {
     pub notifications: bool,
     pub paused: bool,
     pub max_events: u32,
+    /// Interest ids in Dashboard order. Interests not listed follow in their
+    /// Interests page order; see `app::dashboard_cards`.
+    pub dashboard_order: Vec<String>,
 }
 
 impl Default for Settings {
@@ -131,6 +134,7 @@ impl Default for Settings {
             notifications: true,
             paused: false,
             max_events: 300,
+            dashboard_order: Vec::new(),
         }
     }
 }

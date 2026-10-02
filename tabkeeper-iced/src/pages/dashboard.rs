@@ -1,9 +1,10 @@
-use iced::widget::{button, column, container, row, space, text, Column};
-use iced::{Center, Fill, Top};
-use tabkeeper::app::{fmt_ago, fmt_count};
+use iced::widget::{button, column, container, mouse_area, row, space, text, Column};
+use iced::{mouse, Center, Fill, Top};
+use tabkeeper::app::{self, fmt_ago, fmt_count};
 use tabkeeper::model::Interest;
 
 use crate::style::{self, bold, SMALL};
+use super::Drag;
 use crate::widgets::*;
 use crate::{App, Message, Route};
 
@@ -11,7 +12,7 @@ const CARD_MIN_WIDTH: f32 = 320.0;
 const FEED_WIDTH: f32 = 300.0;
 const GAP: f32 = 14.0;
 
-pub fn view(app: &App) -> Element<'_> {
+pub fn view<'a>(app: &'a App, drag: Option<&Drag>) -> Element<'a> {
     let now = app.now;
     let day_ago = now - 86_400_000;
     let updates_24h = app.events.iter().filter(|e| e.at >= day_ago).count() as u64;
@@ -24,6 +25,7 @@ pub fn view(app: &App) -> Element<'_> {
         "Dashboard",
         vec![
             btn("Refresh all", (enabled > 0).then_some(Message::RefreshAll)).into(),
+            btn("Shuffle", (enabled > 1).then_some(Message::ShuffleCards)).into(),
             btn_primary("+ New interest", Some(Message::Navigate(Route::Editor("new".into())))).into(),
         ],
     );
@@ -37,22 +39,30 @@ pub fn view(app: &App) -> Element<'_> {
             if failing > 0 { "✕ needs attention".into() } else { "✓ all healthy".into() },
         ),
     ]);
-    let body = if has_interests { dash(app) } else { empty_state() };
+    let body = if has_interests { dash(app, drag) } else { empty_state() };
     column![head, tiles, body].spacing(18).into()
 }
 
 /// Interest cards in masonry columns, with the recent-updates feed beside
 /// them (or below, when the window is narrow).
-fn dash(app: &App) -> Element<'_> {
+fn dash<'a>(app: &'a App, drag: Option<&Drag>) -> Element<'a> {
     let width = app.content_width();
     let side_by_side = width >= 900.0;
     let cards_width = if side_by_side { width - FEED_WIDTH - 16.0 } else { width };
     let n = (((cards_width + GAP) / (CARD_MIN_WIDTH + GAP)).floor() as usize).max(1);
 
     // Disabled interests are only listed on the Interests page.
+    let cards = app::dashboard_cards(&app.interests, &app.settings.dashboard_order);
+    let from = drag.and_then(|d| cards.iter().position(|i| i.id == d.id));
+    let over = drag.and_then(|d| d.over);
     let mut columns: Vec<Vec<Element>> = (0..n).map(|_| Vec::new()).collect();
-    for (k, i) in app.interests.iter().filter(|i| i.enabled).enumerate() {
-        columns[k % n].push(card(app, i));
+    for (k, i) in cards.into_iter().enumerate() {
+        let look = match (from, over) {
+            (Some(f), _) if f == k => CardLook::DragSource,
+            (Some(_), Some(o)) if o == k => CardLook::DropTarget,
+            _ => CardLook::Normal,
+        };
+        columns[k % n].push(mouse_area(card(app, i, look)).on_enter(Message::DragOver(Some(k))).into());
     }
     let cards: Element = if columns[0].is_empty() {
         panel(
@@ -65,7 +75,13 @@ fn dash(app: &App) -> Element<'_> {
         )
         .into()
     } else {
-        row(columns.into_iter().map(|c| Column::with_children(c).spacing(GAP).width(Fill).into())).spacing(GAP).into()
+        let grid = row(columns.into_iter().map(|c| Column::with_children(c).spacing(GAP).width(Fill).into())).spacing(GAP);
+        if drag.is_some() {
+            // Releasing outside the cards cancels the drag.
+            mouse_area(grid).on_exit(Message::DragOver(None)).interaction(mouse::Interaction::Grabbing).into()
+        } else {
+            grid.into()
+        }
     };
 
     if side_by_side {
@@ -75,12 +91,24 @@ fn dash(app: &App) -> Element<'_> {
     }
 }
 
-fn card<'a>(app: &'a App, interest: &'a Interest) -> Element<'a> {
+/// How a card is drawn while one is being dragged.
+#[derive(Clone, Copy, PartialEq)]
+enum CardLook {
+    Normal,
+    DragSource,
+    DropTarget,
+}
+
+fn card<'a>(app: &'a App, interest: &'a Interest, look: CardLook) -> Element<'a> {
     let st = app.state(&interest.id);
     let unread = app.unread_count(Some(&interest.id));
     let running = app.running.contains(&interest.id);
 
+    let grip = mouse_area(text("⠿").size(18).style(style::ink_2))
+        .on_press(Message::DragStart(interest.id.clone()))
+        .interaction(mouse::Interaction::Grab);
     let mut head = row![
+        grip,
         avatar(app, &display_image(app, interest), &interest.name, 40.0),
         column![
             button(text(interest.name.as_str()).size(15).font(bold()))
@@ -132,7 +160,11 @@ fn card<'a>(app: &'a App, interest: &'a Interest) -> Element<'a> {
         container(foot).padding([8, 14]),
     ])
     .width(Fill)
-    .style(style::panel)
+    .style(match look {
+        CardLook::Normal => style::panel,
+        CardLook::DragSource => style::card_drag_source,
+        CardLook::DropTarget => style::card_drop_target,
+    })
     .into()
 }
 

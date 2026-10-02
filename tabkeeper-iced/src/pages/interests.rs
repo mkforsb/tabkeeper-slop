@@ -5,15 +5,8 @@ use tabkeeper::model::Interest;
 
 use crate::style;
 use crate::widgets::*;
+use super::Drag;
 use crate::{App, Message, Route};
-
-/// An interest being dragged to a new position.
-#[derive(Debug, Clone)]
-pub struct Drag {
-    pub id: String,
-    /// The row under the cursor, where the interest will be moved to.
-    pub over: Option<usize>,
-}
 
 pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>, drag: Option<&Drag>) -> Element<'a> {
     let head = page_head("Interests", vec![btn_primary("+ New interest", Some(Message::Navigate(Route::Editor("new".into())))).into()]);
@@ -71,7 +64,7 @@ pub fn view<'a>(app: &'a App, confirm_delete: Option<&str>, drag: Option<&Drag>)
     } else {
         rows.into()
     };
-    column![head, panel(table), muted("Drag ⠿ to reorder. The dashboard shows interests in this order.")].spacing(18).into()
+    column![head, panel(table), muted("Drag ⠿ to reorder.")].spacing(18).into()
 }
 
 const WIDTHS: [Length; 10] = [

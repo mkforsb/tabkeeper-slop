@@ -69,6 +69,7 @@ pub enum Message {
     Resized(Size),
     Run(String),
     RefreshAll,
+    ShuffleCards,
     /// Interest id, the script that ran, and its report.
     RunFinished(String, String, Box<RunReport>),
     Notified(Result<(), String>),
@@ -79,7 +80,7 @@ pub enum Message {
     SetEnabled(String, bool),
     SetReversed(String, bool),
     ConfirmDelete(Option<String>),
-    /// Reordering on the Interests page.
+    /// Reordering on the Interests page and the Dashboard.
     DragStart(String),
     DragOver(Option<usize>),
     DragEnd,
@@ -167,7 +168,7 @@ impl App {
             now: now_ms(),
             notify_error: None,
             images: Images::default(),
-            page: Page::Dashboard,
+            page: Page::Dashboard { drag: None },
             dirty: Dirty::default(),
             toast: None,
             more: HashMap::new(),
@@ -187,7 +188,7 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let dragging = matches!(self.page, Page::Interests { drag: Some(_), .. });
+        let dragging = matches!(self.page, Page::Interests { drag: Some(_), .. } | Page::Dashboard { drag: Some(_) });
         Subscription::batch([
             iced::time::every(Duration::from_millis(TICK_MS)).map(|_| Message::Tick),
             iced::system::theme_changes().map(Message::ThemeChanged),
@@ -262,22 +263,36 @@ impl App {
                 }
             }
             Message::DragStart(id) => {
-                if let Page::Interests { drag, .. } = &mut self.page {
-                    *drag = Some(pages::interests::Drag { id, over: None });
+                if let Page::Interests { drag, .. } | Page::Dashboard { drag } = &mut self.page {
+                    *drag = Some(pages::Drag { id, over: None });
                 }
             }
-            Message::DragOver(row) => {
-                if let Page::Interests { drag: Some(d), .. } = &mut self.page {
-                    d.over = row;
+            Message::DragOver(over) => {
+                if let Page::Interests { drag: Some(d), .. } | Page::Dashboard { drag: Some(d) } = &mut self.page {
+                    d.over = over;
                 }
             }
-            Message::DragEnd => {
-                if let Page::Interests { drag, .. } = &mut self.page {
-                    if let Some(pages::interests::Drag { id, over: Some(to) }) = drag.take() {
+            Message::DragEnd => match &mut self.page {
+                Page::Interests { drag, .. } => {
+                    if let Some(pages::Drag { id, over: Some(to) }) = drag.take() {
                         app::move_interest(&mut self.interests, &id, to);
                         self.dirty.interests = true;
                     }
                 }
+                Page::Dashboard { drag } => {
+                    if let Some(pages::Drag { id, over: Some(to) }) = drag.take() {
+                        let cards = app::dashboard_cards(&self.interests, &self.settings.dashboard_order);
+                        if let Some(target) = cards.get(to).map(|i| i.id.clone()) {
+                            app::move_card(&mut self.settings.dashboard_order, &self.interests, &id, &target);
+                            self.dirty.settings = true;
+                        }
+                    }
+                }
+                _ => {}
+            },
+            Message::ShuffleCards => {
+                app::shuffle_cards(&mut self.settings.dashboard_order, &self.interests);
+                self.dirty.settings = true;
             }
             Message::Delete(id) => self.delete_interest(&id),
             Message::ConfirmClear(on) => {

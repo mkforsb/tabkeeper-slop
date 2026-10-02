@@ -40,12 +40,43 @@ pub fn upsert_interest(list: &mut Vec<Interest>, states: &mut HashMap<String, In
     }
 }
 
-/// Moves interest `id` to position `to` (clamped to the list). The list's
-/// order is also the dashboard's.
+/// Moves interest `id` to position `to` (clamped to the list).
 pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
     let Some(from) = list.iter().position(|i| i.id == id) else { return };
     let interest = list.remove(from);
     list.insert(to.min(list.len()), interest);
+}
+
+/// All interests in Dashboard order: those in `order` (as saved in
+/// `Settings::dashboard_order`) first, then the rest in their list order.
+fn dashboard_order<'a>(interests: &'a [Interest], order: &[String]) -> Vec<&'a Interest> {
+    let pos: HashMap<&str, usize> = order.iter().enumerate().map(|(k, id)| (id.as_str(), k)).collect();
+    let mut all: Vec<&Interest> = interests.iter().collect();
+    all.sort_by_key(|i| pos.get(i.id.as_str()).copied().unwrap_or(usize::MAX));
+    all
+}
+
+/// The interests shown on the Dashboard, in its order. Disabled ones are left
+/// out, but keep their place in `order` for when they're enabled again.
+pub fn dashboard_cards<'a>(interests: &'a [Interest], order: &[String]) -> Vec<&'a Interest> {
+    dashboard_order(interests, order).into_iter().filter(|i| i.enabled).collect()
+}
+
+/// Moves card `id` to where card `target` is; the cards in between shift over.
+pub fn move_card(order: &mut Vec<String>, interests: &[Interest], id: &str, target: &str) {
+    let mut ids: Vec<String> = dashboard_order(interests, order).into_iter().map(|i| i.id.clone()).collect();
+    let (Some(from), Some(to)) = (ids.iter().position(|i| i == id), ids.iter().position(|i| i == target)) else { return };
+    let moved = ids.remove(from);
+    ids.insert(to, moved);
+    *order = ids;
+}
+
+/// Puts the Dashboard cards in random order.
+pub fn shuffle_cards(order: &mut Vec<String>, interests: &[Interest]) {
+    let mut ids: Vec<String> = interests.iter().map(|i| i.id.clone()).collect();
+    // Sorting by fresh random keys is a uniform shuffle without a rand dependency.
+    ids.sort_by_cached_key(|_| uuid::Uuid::new_v4());
+    *order = ids;
 }
 
 /// How many more items each click on an output's "+ N more" shows.
@@ -214,6 +245,26 @@ mod tests {
         assert_eq!(ids(&list), "dcab");
         move_interest(&mut list, "missing", 0);
         assert_eq!(ids(&list), "dcab");
+    }
+
+    #[test]
+    fn dashboard_order_and_moves() {
+        let interests: Vec<Interest> =
+            "abcde".chars().map(|c| Interest { id: c.into(), enabled: c != 'b', ..Default::default() }).collect();
+        let cards = |order: &[String]| dashboard_cards(&interests, order).iter().map(|i| i.id.clone()).collect::<String>();
+        // Unlisted interests follow in list order; unknown ids are ignored.
+        let mut order: Vec<String> = ["d", "gone", "b", "a"].map(String::from).to_vec();
+        assert_eq!(cards(&order), "dace");
+        move_card(&mut order, &interests, "d", "c");
+        assert_eq!(cards(&order), "acde");
+        // Hidden, disabled "b" keeps its place for when it's enabled again.
+        assert_eq!(order.join(""), "bacde");
+        move_card(&mut order, &interests, "e", "a");
+        assert_eq!(cards(&order), "eacd");
+        shuffle_cards(&mut order, &interests);
+        let mut sorted = order.clone();
+        sorted.sort();
+        assert_eq!(sorted.join(""), "abcde");
     }
 
     #[test]

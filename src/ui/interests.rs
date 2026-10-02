@@ -7,15 +7,6 @@ use super::state::*;
 use super::worker::start_run;
 use super::{fmt_count, Route};
 
-/// An interest being dragged to a new position. Built on mouse events rather
-/// than HTML drag and drop, which the webview's file-drop handling can block.
-#[derive(Clone, PartialEq)]
-struct Drag {
-    id: String,
-    /// The row under the cursor, where the interest will be moved to.
-    over: Option<usize>,
-}
-
 #[component]
 pub fn Interests() -> Element {
     let interests = INTERESTS();
@@ -75,7 +66,7 @@ pub fn Interests() -> Element {
                     }
                 }
             }
-            p { class: "muted small", "Drag ⠿ to reorder. The dashboard shows interests in this order." }
+            p { class: "muted small", "Drag ⠿ to reorder." }
         }
     }
 }

@@ -6,6 +6,16 @@ use tabkeeper::model::{Interest, Item, Output};
 use super::state::*;
 use super::{fmt_ago, fmt_in};
 
+/// An interest being dragged to a new position, on the Interests page or the
+/// Dashboard. Built on mouse events rather than HTML drag and drop, which the
+/// webview's file-drop handling can block.
+#[derive(Clone, PartialEq)]
+pub struct Drag {
+    pub id: String,
+    /// The row or card under the cursor, where the interest will be moved to.
+    pub over: Option<usize>,
+}
+
 /// Status shown with an icon and label, never color alone.
 #[component]
 pub fn StatusPill(interest: Interest) -> Element {

@@ -12,11 +12,20 @@ use iced::widget::column;
 use crate::widgets::{btn, h2, panel, Element};
 use crate::{App, Message, Route};
 
+/// An interest being dragged to a new position, on the Interests page or the
+/// Dashboard.
+#[derive(Debug, Clone)]
+pub struct Drag {
+    pub id: String,
+    /// The row or card under the cursor, where the interest will be moved to.
+    pub over: Option<usize>,
+}
+
 /// The current page and its view state.
 pub enum Page {
-    Dashboard,
+    Dashboard { drag: Option<Drag> },
     /// `confirm_delete`: the interest whose Delete button was clicked.
-    Interests { confirm_delete: Option<String>, drag: Option<interests::Drag> },
+    Interests { confirm_delete: Option<String>, drag: Option<Drag> },
     Editor(Box<editor::Editor>),
     NotFound,
     /// `shown`: how many events are listed.
@@ -28,7 +37,7 @@ pub enum Page {
 impl Page {
     pub fn open(app: &App, route: Route) -> Page {
         match route {
-            Route::Dashboard => Page::Dashboard,
+            Route::Dashboard => Page::Dashboard { drag: None },
             Route::Interests => Page::Interests { confirm_delete: None, drag: None },
             Route::Editor(id) => editor::Editor::open(app, &id).map(|e| Page::Editor(Box::new(e))).unwrap_or(Page::NotFound),
             Route::Updates => Page::Updates { confirm_clear: false, shown: updates::PAGE_SIZE },
@@ -41,7 +50,7 @@ impl Page {
     pub fn is(&self, route: &Route) -> bool {
         matches!(
             (self, route),
-            (Page::Dashboard, Route::Dashboard)
+            (Page::Dashboard { .. }, Route::Dashboard)
                 | (Page::Interests { .. }, Route::Interests)
                 | (Page::Updates { .. }, Route::Updates)
                 | (Page::Stats, Route::Stats)
@@ -60,7 +69,7 @@ pub fn modal(app: &App) -> Option<Element<'_>> {
 
 pub fn view(app: &App) -> Element<'_> {
     match &app.page {
-        Page::Dashboard => dashboard::view(app),
+        Page::Dashboard { drag } => dashboard::view(app, drag.as_ref()),
         Page::Interests { confirm_delete, drag } => interests::view(app, confirm_delete.as_deref(), drag.as_ref()),
         Page::Editor(e) => editor::view(app, e),
         Page::NotFound => panel(
