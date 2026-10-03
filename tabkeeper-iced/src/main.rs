@@ -12,7 +12,8 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use iced::theme::Mode;
-use iced::widget::operation::{snap_to, RelativeOffset};
+use iced::widget::operation::{scroll_to, snap_to, AbsoluteOffset, RelativeOffset};
+use iced::widget::selector::{self, Target};
 use iced::widget::{bottom_right, button, column, container, row, rule, scrollable, space, stack, text, Id};
 use iced::{window, Center, Fill, Padding, Size, Subscription, Task, Theme};
 use tabkeeper::app;
@@ -31,6 +32,8 @@ const TICK_MS: u64 = 5_000;
 const SIDEBAR_WIDTH: f32 = 200.0;
 const WINDOW_SIZE: Size = Size::new(1280.0, 860.0);
 static CONTENT: LazyLock<Id> = LazyLock::new(|| Id::new("content"));
+/// Space left above a widget scrolled to by [`scroll_to_widget`].
+const SCROLL_MARGIN: f32 = 12.0;
 
 pub fn main() -> iced::Result {
     // iced multiplies the window size by the UI scale; divide so the window
@@ -65,6 +68,8 @@ pub enum Route {
 #[derive(Debug, Clone)]
 pub enum Message {
     Navigate(Route),
+    /// Opens the Updates page scrolled to this update.
+    ShowEvent(String),
     Tick,
     ThemeChanged(Mode),
     Resized(Size),
@@ -149,6 +154,20 @@ pub struct App {
     window_width: f32,
 }
 
+/// Scrolls the page content so the widget `id` is at the top (or as far as
+/// the content scrolls). Runs after the next layout, so it can follow a page change.
+fn scroll_to_widget(id: Id) -> Task<Message> {
+    selector::find(id).then(|target| {
+        selector::find(CONTENT.clone()).then(move |content| match (&target, content) {
+            (Some(target), Some(Target::Scrollable { content_bounds, .. })) => {
+                let y = target.bounds().y - content_bounds.y - SCROLL_MARGIN;
+                scroll_to(CONTENT.clone(), AbsoluteOffset { x: None, y: Some(y.max(0.0)) })
+            }
+            _ => Task::none(),
+        })
+    })
+}
+
 fn drag_release(event: iced::Event, _: iced::event::Status, _: window::Id) -> Option<Message> {
     matches!(event, iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left))).then_some(Message::DragEnd)
 }
@@ -221,6 +240,16 @@ impl App {
                 self.more.clear();
                 self.page = Page::open(self, route);
                 return snap_to(CONTENT.clone(), RelativeOffset::START);
+            }
+            Message::ShowEvent(id) => {
+                self.more.clear();
+                let index = self.events.iter().position(|e| e.id == id).unwrap_or(0);
+                self.page = Page::Updates {
+                    confirm_clear: false,
+                    shown: pages::updates::PAGE_SIZE.max(index + 1),
+                    target: Some(id.clone()),
+                };
+                return scroll_to_widget(pages::updates::event_id(&id));
             }
             Message::Tick => {
                 self.now = now_ms();

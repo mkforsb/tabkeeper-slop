@@ -185,7 +185,7 @@ fn feed(app: &App) -> iced::widget::Container<'_, Message> {
     for e in app.events.iter().take(8) {
         let entry = column![
             row![
-                link(text(e.interest_name.as_str()), Route::Editor(e.interest_id.clone())),
+                button(text(e.interest_name.as_str())).padding(0).style(style::link).on_press(Message::ShowEvent(e.id.clone())),
                 space::horizontal(),
                 muted(fmt_ago(Some(e.at), app.now)),
             ]

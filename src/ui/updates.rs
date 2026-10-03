@@ -10,6 +10,9 @@ pub fn Updates() -> Element {
     let now = NOW();
     let mut confirm_clear = use_signal(|| false);
     let unread = unread_count(None);
+    // The update clicked in the Dashboard's Recent updates, if that's how we
+    // got here: scrolled to and highlighted.
+    let target = use_hook(|| SHOW_EVENT.write().take());
 
     rsx! {
         div { class: "page-head",
@@ -29,7 +32,21 @@ pub fn Updates() -> Element {
         }
         div { class: "timeline",
             for e in events {
-                div { key: "{e.id}", class: if e.read { "panel event" } else { "panel event unread" },
+                div {
+                    key: "{e.id}",
+                    class: format!(
+                        "panel event{}{}",
+                        if e.read { "" } else { " unread" },
+                        if target.as_deref() == Some(e.id.as_str()) { " target" } else { "" },
+                    ),
+                    onmounted: {
+                        let scroll = target.as_deref() == Some(e.id.as_str());
+                        move |m: MountedEvent| async move {
+                            if scroll {
+                                let _ = m.scroll_to(ScrollBehavior::Instant).await;
+                            }
+                        }
+                    },
                     div { class: "event-head",
                         Link { class: "event-name", to: Route::Editor { id: e.interest_id.clone() }, "{e.interest_name}" }
                         span { class: "muted small", title: "{fmt_time(e.at)}", "{fmt_ago(Some(e.at), now)}" }

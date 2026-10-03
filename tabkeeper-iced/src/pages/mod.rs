@@ -30,8 +30,9 @@ pub enum Page {
     Interests { confirm_delete: Option<String>, drag: Option<Drag> },
     Editor(Box<editor::Editor>),
     NotFound,
-    /// `shown`: how many events are listed.
-    Updates { confirm_clear: bool, shown: usize },
+    /// `shown`: how many events are listed. `target`: the update clicked in
+    /// the Dashboard's Recent updates, highlighted.
+    Updates { confirm_clear: bool, shown: usize, target: Option<String> },
     Stats,
     Settings(Box<settings::SettingsPage>),
 }
@@ -43,7 +44,7 @@ impl Page {
             Route::Starred => Page::Starred { drag: None },
             Route::Interests => Page::Interests { confirm_delete: None, drag: None },
             Route::Editor(id) => editor::Editor::open(app, &id).map(|e| Page::Editor(Box::new(e))).unwrap_or(Page::NotFound),
-            Route::Updates => Page::Updates { confirm_clear: false, shown: updates::PAGE_SIZE },
+            Route::Updates => Page::Updates { confirm_clear: false, shown: updates::PAGE_SIZE, target: None },
             Route::Stats => Page::Stats,
             Route::Settings => Page::Settings(Box::new(settings::SettingsPage::new(app))),
         }
@@ -81,7 +82,7 @@ pub fn view(app: &App) -> Element<'_> {
             column![h2("Interest not found"), btn("Back to interests", Some(Message::Navigate(Route::Interests)))].spacing(12),
         )
         .into(),
-        Page::Updates { confirm_clear, shown } => updates::view(app, *confirm_clear, *shown),
+        Page::Updates { confirm_clear, shown, target } => updates::view(app, *confirm_clear, *shown, target.as_deref()),
         Page::Stats => stats::view(app),
         Page::Settings(s) => settings::view(app, s),
     }

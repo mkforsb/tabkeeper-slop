@@ -1,5 +1,5 @@
-use iced::widget::{column, row, text, Column};
-use iced::Center;
+use iced::widget::{column, container, row, text, Column, Id};
+use iced::{Center, Fill};
 use tabkeeper::app::{fmt_ago, fmt_time};
 
 use crate::style::{self, bold};
@@ -9,7 +9,12 @@ use crate::{App, Message, Route};
 /// Events are listed in pages of this size; the history can hold hundreds.
 pub const PAGE_SIZE: usize = 50;
 
-pub fn view(app: &App, confirm_clear: bool, shown: usize) -> Element<'_> {
+/// The widget id of an update's panel, for scrolling to it.
+pub fn event_id(id: &str) -> Id {
+    Id::from(format!("event:{id}"))
+}
+
+pub fn view<'a>(app: &'a App, confirm_clear: bool, shown: usize, target: Option<&str>) -> Element<'a> {
     let unread = app.unread_count(None);
     let mut actions: Vec<Element> = vec![btn("Mark all read", (unread > 0).then_some(Message::MarkRead(None))).into()];
     if confirm_clear {
@@ -39,7 +44,11 @@ pub fn view(app: &App, confirm_clear: bool, shown: usize) -> Element<'_> {
         if !e.items.is_empty() {
             body = body.push(Column::with_children(e.items.iter().map(|i| item_row(app, i, true, Some(&e.interest_id)))).spacing(4));
         }
-        timeline = timeline.push(panel(if e.read { body.into() } else { unread_marker(body.into()) }));
+        let mut p = panel(if e.read { body.into() } else { unread_marker(body.into()) });
+        if target == Some(e.id.as_str()) {
+            p = p.style(style::card_drop_target);
+        }
+        timeline = timeline.push(container(p).id(event_id(&e.id)).width(Fill));
     }
     page = page.push(timeline);
 

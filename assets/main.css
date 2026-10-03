@@ -221,6 +221,7 @@ details summary { cursor: pointer; font-weight: 500; margin: 6px 0; }
 .timeline { display: flex; flex-direction: column; }
 .event { border-left: 3px solid transparent; }
 .event.unread { border-left-color: var(--accent); }
+.event.target { box-shadow: 0 0 0 2px var(--accent); scroll-margin-top: 12px; }
 .event-head { display: flex; gap: 10px; align-items: baseline; }
 .event-name { font-weight: 600; }
 .event-head .btn { margin-left: auto; }

@@ -23,6 +23,9 @@ pub static RUNNING: GlobalSignal<HashSet<String>> = Signal::global(HashSet::new)
 pub static SESSION_STARTED: GlobalSignal<Millis> = Signal::global(now_ms);
 /// A coarse clock so relative times ("5m ago") refresh.
 pub static NOW: GlobalSignal<Millis> = Signal::global(now_ms);
+/// The update to scroll to when the Updates page opens next, set by clicking
+/// it in the Dashboard's Recent updates.
+pub static SHOW_EVENT: GlobalSignal<Option<String>> = Signal::global(|| None);
 /// Last notification error, shown in Settings.
 pub static NOTIFY_ERROR: GlobalSignal<Option<String>> = Signal::global(|| None);
 

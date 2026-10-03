@@ -102,7 +102,14 @@ pub fn Dashboard() -> Element {
                     for e in events {
                         div { key: "{e.id}", class: if e.read { "feed-item" } else { "feed-item unread" },
                             div { class: "feed-meta",
-                                Link { to: Route::Editor { id: e.interest_id.clone() }, "{e.interest_name}" }
+                                Link {
+                                    to: Route::Updates {},
+                                    onclick: {
+                                        let id = e.id.clone();
+                                        move |_| *SHOW_EVENT.write() = Some(id.clone())
+                                    },
+                                    "{e.interest_name}"
+                                }
                                 span { class: "muted small", "{fmt_ago(Some(e.at), now)}" }
                             }
                             div { class: "small", "{e.summary}" }
