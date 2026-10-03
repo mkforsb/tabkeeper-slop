@@ -361,6 +361,20 @@ pub fn plain_link(theme: &Theme, status: button::Status) -> button::Style {
     button::Style { background: None, text_color: color, ..Default::default() }
 }
 
+/// The star next to an item: faint gray, or yellow when starred.
+pub fn star(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let c = colors(theme);
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let color = match (on, hovered) {
+            (true, _) => WARNING,
+            (false, true) => c.muted.scale_alpha(0.85),
+            (false, false) => c.muted.scale_alpha(0.45),
+        };
+        button::Style { background: None, text_color: color, ..Default::default() }
+    }
+}
+
 /// The "3 new" pill on cards.
 pub fn badge(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);

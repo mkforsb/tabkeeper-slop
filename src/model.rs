@@ -112,6 +112,20 @@ pub struct UpdateEvent {
     pub read: bool,
 }
 
+/// An item the user starred, kept as it was when starred: it stays listed
+/// after it drops out of its interest's output, or the interest is deleted.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct StarredItem {
+    /// Identifies this entry in the Starred list.
+    pub id: String,
+    pub interest_id: String,
+    /// The interest's name when starred, shown if the interest is deleted.
+    pub interest_name: String,
+    pub item: Item,
+    pub starred_at: Millis,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {

@@ -47,7 +47,7 @@ pub fn Updates() -> Element {
                     p { "{e.summary}" }
                     if !e.items.is_empty() {
                         div { class: "items",
-                            for item in e.items.iter() { ItemRow { key: "{item.id}", item: item.clone(), fresh: true } }
+                            for item in e.items.iter() { ItemRow { key: "{item.id}", item: item.clone(), fresh: true, interest_id: e.interest_id.clone() } }
                         }
                     }
                 }

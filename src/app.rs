@@ -19,6 +19,7 @@ pub struct Backup {
     pub events: Vec<UpdateEvent>,
     pub settings: Settings,
     pub system: SystemStats,
+    pub starred: Vec<StarredItem>,
 }
 
 pub fn upsert_interest(list: &mut Vec<Interest>, states: &mut HashMap<String, InterestState>, updated: Interest) {
@@ -40,11 +41,43 @@ pub fn upsert_interest(list: &mut Vec<Interest>, states: &mut HashMap<String, In
     }
 }
 
+/// Moves the entry at `from` to position `to` (clamped to the list).
+fn move_entry<T>(list: &mut Vec<T>, from: Option<usize>, to: usize) {
+    let Some(from) = from else { return };
+    let entry = list.remove(from);
+    list.insert(to.min(list.len()), entry);
+}
+
 /// Moves interest `id` to position `to` (clamped to the list).
 pub fn move_interest(list: &mut Vec<Interest>, id: &str, to: usize) {
-    let Some(from) = list.iter().position(|i| i.id == id) else { return };
-    let interest = list.remove(from);
-    list.insert(to.min(list.len()), interest);
+    move_entry(list, list.iter().position(|i| i.id == id), to);
+}
+
+pub fn is_starred(starred: &[StarredItem], interest_id: &str, item_id: &str) -> bool {
+    starred.iter().any(|s| s.interest_id == interest_id && s.item.id == item_id)
+}
+
+/// Stars an item of interest `interest_id`, or unstars it if it's starred.
+/// New stars go to the top of the Starred list.
+pub fn toggle_star(starred: &mut Vec<StarredItem>, interests: &[Interest], interest_id: &str, item: &Item, now: Millis) {
+    if is_starred(starred, interest_id, &item.id) {
+        starred.retain(|s| !(s.interest_id == interest_id && s.item.id == item.id));
+        return;
+    }
+    let interest_name = interests.iter().find(|i| i.id == interest_id).map(|i| i.name.clone()).unwrap_or_default();
+    let entry = StarredItem {
+        id: uuid::Uuid::new_v4().to_string(),
+        interest_id: interest_id.to_string(),
+        interest_name,
+        item: item.clone(),
+        starred_at: now,
+    };
+    starred.insert(0, entry);
+}
+
+/// Moves Starred entry `id` to position `to` (clamped to the list).
+pub fn move_starred(list: &mut Vec<StarredItem>, id: &str, to: usize) {
+    move_entry(list, list.iter().position(|s| s.id == id), to);
 }
 
 /// Zeroes the failure counts, overall and per interest. Whether an interest
@@ -274,6 +307,31 @@ mod tests {
         let mut sorted = order.clone();
         sorted.sort();
         assert_eq!(sorted.join(""), "abcde");
+    }
+
+    #[test]
+    fn stars_toggle_and_reorder() {
+        let interests = vec![Interest { id: "i".into(), name: "Feed".into(), ..Default::default() }];
+        let item = |id: &str| Item { id: id.into(), title: id.to_uppercase(), ..Default::default() };
+        let mut starred = Vec::new();
+        for id in ["a", "b", "c"] {
+            toggle_star(&mut starred, &interests, "i", &item(id), 1);
+        }
+        let ids = |list: &[StarredItem]| list.iter().map(|s| s.item.id.clone()).collect::<String>();
+        // Newest first, with the interest's name remembered.
+        assert_eq!(ids(&starred), "cba");
+        assert_eq!(starred[0].interest_name, "Feed");
+        // The same item id under another interest is a different star.
+        toggle_star(&mut starred, &interests, "other", &item("a"), 2);
+        assert!(is_starred(&starred, "other", "a") && is_starred(&starred, "i", "a"));
+        assert_eq!(ids(&starred), "acba");
+        toggle_star(&mut starred, &interests, "other", &item("a"), 3);
+        assert!(!is_starred(&starred, "other", "a"));
+        let a = starred[2].id.clone();
+        move_starred(&mut starred, &a, 0);
+        assert_eq!(ids(&starred), "acb");
+        toggle_star(&mut starred, &interests, "i", &item("c"), 4);
+        assert_eq!(ids(&starred), "ab");
     }
 
     #[test]

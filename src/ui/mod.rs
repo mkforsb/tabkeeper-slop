@@ -3,6 +3,7 @@ mod dashboard;
 mod editor;
 mod interests;
 mod settings;
+mod starred;
 pub mod state;
 mod stats;
 mod updates;
@@ -14,6 +15,7 @@ use dashboard::Dashboard;
 use editor::Editor;
 use interests::Interests;
 use settings::SettingsPage;
+use starred::Starred;
 use state::*;
 use stats::Stats;
 use updates::Updates;
@@ -28,6 +30,8 @@ pub enum Route {
     #[layout(Shell)]
         #[route("/")]
         Dashboard {},
+        #[route("/starred")]
+        Starred {},
         #[route("/interests")]
         Interests {},
         #[route("/interest/:id")]
@@ -56,6 +60,7 @@ fn Shell() -> Element {
     let running = RUNNING.read().len();
     let unread = unread_count(None);
     let total = INTERESTS.read().len();
+    let starred = STARRED.read().len();
     let enabled = INTERESTS.read().iter().filter(|i| i.enabled).count();
 
     rsx! {
@@ -63,6 +68,9 @@ fn Shell() -> Element {
             nav { class: "sidebar",
                 div { class: "brand", span { class: "brand-mark", "◉" } "Tabkeeper" }
                 Link { class: "nav", active_class: "active", to: Route::Dashboard {}, "Dashboard" }
+                Link { class: "nav", active_class: "active", to: Route::Starred {}, "Starred"
+                    span { class: "nav-count", "{starred}" }
+                }
                 Link { class: "nav", active_class: "active", to: Route::Interests {}, "Interests"
                     span { class: "nav-count", "{total}" }
                 }

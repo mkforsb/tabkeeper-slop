@@ -362,7 +362,7 @@ fn side<'a>(app: &'a App, ed: &'a Editor) -> Column<'a, Message> {
         }
         if let Some(out) = &st.last_output {
             let summary = format!("Current output ({} items)", out.items.len());
-            p = p.push(details(summary, ed.show_output, msg(Msg::ToggleOutput), || output_view(app, out, 20, true, ed.draft.reverse_order, "editor:output".into())));
+            p = p.push(details(summary, ed.show_output, msg(Msg::ToggleOutput), || output_view(app, out, 20, true, ed.draft.reverse_order, "editor:output".into(), None)));
         }
         side = side.push(panel(p));
     }
@@ -439,7 +439,7 @@ fn test_result<'a>(app: &'a App, report: &'a RunReport, interest_id: &str) -> El
         p = p.push(log_box(&report.logs));
     }
     if let Ok(out) = &report.result {
-        p = p.push(output_view(app, out, 30, true, false, "editor:test".into()));
+        p = p.push(output_view(app, out, 30, true, false, "editor:test".into(), None));
     }
     panel(p).into()
 }

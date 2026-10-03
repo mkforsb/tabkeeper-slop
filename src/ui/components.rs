@@ -73,12 +73,30 @@ pub fn Avatar(src: String, name: String, #[props(default = "avatar".to_string())
     }
 }
 
+/// Stars or unstars an item of interest `interest_id`.
 #[component]
-pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool) -> Element {
+pub fn Star(interest_id: String, item: Item) -> Element {
+    let on = is_starred(&interest_id, &item.id);
+    rsx! {
+        button {
+            class: if on { "star on" } else { "star" },
+            title: if on { "Unstar" } else { "Star" },
+            onclick: move |_| toggle_star(&interest_id, &item),
+            "★"
+        }
+    }
+}
+
+/// `interest_id`: the interest the item belongs to, to show a [`Star`].
+#[component]
+pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool, #[props(default)] interest_id: Option<String>) -> Element {
     let title = [&item.title, &item.text, &item.url, &item.id].into_iter().find(|s| !s.is_empty()).cloned().unwrap_or_default();
     let show_text = !item.text.is_empty() && item.text != title;
     rsx! {
         div { class: if fresh { "item fresh" } else { "item" },
+            if let Some(interest_id) = interest_id {
+                Star { interest_id, item: item.clone() }
+            }
             if !item.image.is_empty() {
                 img { class: "item-thumb", src: "{item.image}", alt: "", referrerpolicy: "no-referrer", loading: "lazy" }
             }
@@ -96,13 +114,15 @@ pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool) -> Element {
 }
 
 /// Renders a script output. `limit` caps the number of items shown at first;
-/// "+ N more" shows more. `reverse` lists them last to first.
+/// "+ N more" shows more. `reverse` lists them last to first. With
+/// `interest_id`, the output's items can be starred.
 #[component]
 pub fn OutputView(
     output: Output,
     #[props(default = usize::MAX)] limit: usize,
     #[props(default = true)] show_image: bool,
     #[props(default = false)] reverse: bool,
+    #[props(default)] interest_id: Option<String>,
 ) -> Element {
     let mut extra = use_signal(|| 0usize);
     let limit = limit.saturating_add(extra());
@@ -130,7 +150,7 @@ pub fn OutputView(
             if let Some(key) = &output.key { div { class: "muted small", "key: {key}" } }
             if !shown.is_empty() {
                 div { class: "items",
-                    for item in shown { ItemRow { key: "{item.id}", item: item.clone() } }
+                    for item in shown { ItemRow { key: "{item.id}", item: item.clone(), interest_id: interest_id.clone() } }
                 }
             }
             if hidden > 0 || extra() > 0 {

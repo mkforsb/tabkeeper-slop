@@ -193,7 +193,18 @@ pub fn clamp(s: &str, n: usize) -> String {
     }
 }
 
-pub fn item_row<'a>(app: &App, item: &Item, fresh: bool) -> Element<'a> {
+/// Stars or unstars `item` of interest `interest_id`.
+pub fn star<'a>(app: &App, interest_id: &str, item: &Item) -> Element<'a> {
+    let on = app.is_starred(interest_id, &item.id);
+    button(text("★").size(15))
+        .padding([0, 2])
+        .style(style::star(on))
+        .on_press(Message::ToggleStar(interest_id.to_string(), item.clone()))
+        .into()
+}
+
+/// `star`: the interest the item belongs to, to show a [`star`].
+pub fn item_row<'a>(app: &App, item: &Item, fresh: bool, star: Option<&str>) -> Element<'a> {
     let title = item_title(item);
     let mut body = column![ext_link(clamp(title, 140), &item.url, style::regular())].spacing(1).width(Fill);
     if !item.date.is_empty() {
@@ -203,6 +214,9 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool) -> Element<'a> {
         body = body.push(text(clamp(&item.text, 220)).size(SMALL).style(style::ink_2));
     }
     let mut r = row![].spacing(10);
+    if let Some(interest_id) = star {
+        r = r.push(self::star(app, interest_id, item));
+    }
     if !item.image.is_empty() && !app.images.failed(&item.image) {
         let placeholder = container(space::horizontal()).style(style::log);
         r = r.push(app.images.view(&item.image, 64.0, 40.0, 5.0, placeholder));
@@ -217,8 +231,17 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool) -> Element<'a> {
 
 /// Renders a script output. `limit` caps the number of items shown at first;
 /// "+ N more" shows more, remembered in [`App::more`] under `key`. `reverse`
-/// lists them last to first.
-pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: bool, reverse: bool, key: String) -> Element<'a> {
+/// lists them last to first. With `star`, the id of the interest that
+/// produced it, the items can be starred.
+pub fn output_view<'a>(
+    app: &App,
+    output: &'a Output,
+    limit: usize,
+    show_image: bool,
+    reverse: bool,
+    key: String,
+    star: Option<&str>,
+) -> Element<'a> {
     let extra = app.more.get(&key).copied().unwrap_or(0);
     let limit = limit.saturating_add(extra);
     let mut col = column![].spacing(6).width(Fill);
@@ -238,7 +261,7 @@ pub fn output_view<'a>(app: &App, output: &'a Output, limit: usize, show_image: 
     let shown = output.items.len().min(limit);
     if shown > 0 {
         let items: Box<dyn Iterator<Item = &Item>> = if reverse { Box::new(output.items.iter().rev()) } else { Box::new(output.items.iter()) };
-        col = col.push(Column::with_children(items.take(limit).map(|i| item_row(app, i, false))).spacing(4));
+        col = col.push(Column::with_children(items.take(limit).map(|i| item_row(app, i, false, star))).spacing(4));
     }
     let hidden = output.items.len() - shown;
     if hidden > 0 || extra > 0 {

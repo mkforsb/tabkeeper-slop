@@ -15,6 +15,8 @@ pub static STATES: GlobalSignal<HashMap<String, InterestState>> = Signal::global
 pub static EVENTS: GlobalSignal<Vec<UpdateEvent>> = Signal::global(|| storage::load("events"));
 pub static SETTINGS: GlobalSignal<Settings> = Signal::global(|| storage::load("settings"));
 pub static SYSTEM: GlobalSignal<SystemStats> = Signal::global(|| storage::load("system"));
+/// In the Starred page's order.
+pub static STARRED: GlobalSignal<Vec<StarredItem>> = Signal::global(|| storage::load("starred"));
 
 /// Ids of interests whose script is running right now.
 pub static RUNNING: GlobalSignal<HashSet<String>> = Signal::global(HashSet::new);
@@ -40,6 +42,7 @@ pub fn use_persistence() {
     use_effect(|| storage::save("events", &*EVENTS.read()));
     use_effect(|| storage::save("settings", &*SETTINGS.read()));
     use_effect(|| storage::save("system", &*SYSTEM.read()));
+    use_effect(|| storage::save("starred", &*STARRED.read()));
 }
 
 pub fn interest(id: &str) -> Option<Interest> {
@@ -55,6 +58,14 @@ pub fn set_reversed(id: &str, on: bool) {
     if let Some(i) = INTERESTS.write().iter_mut().find(|i| i.id == id) {
         i.reverse_order = on;
     }
+}
+
+pub fn is_starred(interest_id: &str, item_id: &str) -> bool {
+    app::is_starred(&STARRED.read(), interest_id, item_id)
+}
+
+pub fn toggle_star(interest_id: &str, item: &Item) {
+    app::toggle_star(&mut STARRED.write(), &INTERESTS.read(), interest_id, item, now_ms());
 }
 
 pub fn reset_failures() {
@@ -85,6 +96,7 @@ pub fn export_json() -> String {
         events: EVENTS(),
         settings: SETTINGS(),
         system: SYSTEM(),
+        starred: STARRED(),
     };
     serde_json::to_string_pretty(&backup).unwrap_or_default()
 }
@@ -97,6 +109,7 @@ pub fn import_json(s: &str) -> Result<usize, String> {
     *EVENTS.write() = b.events;
     *SETTINGS.write() = b.settings;
     *SYSTEM.write() = b.system;
+    *STARRED.write() = b.starred;
     Ok(n)
 }
 
@@ -106,4 +119,5 @@ pub fn storage_size() -> usize {
         serde_json::to_string(v).map(|s| s.len()).unwrap_or(0)
     }
     len(&*INTERESTS.read()) + len(&*STATES.read()) + len(&*EVENTS.read()) + len(&*SETTINGS.read()) + len(&*SYSTEM.read())
+        + len(&*STARRED.read())
 }

@@ -124,6 +124,7 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
                 events: app.events.clone(),
                 settings: app.settings.clone(),
                 system: app.system.clone(),
+                starred: app.starred.clone(),
             };
             let json = serde_json::to_string_pretty(&backup).unwrap_or_default();
             page.export = Some(text_editor::Content::with_text(&json));
@@ -172,6 +173,7 @@ fn restore(app: &mut App, b: Backup) {
     app.events = b.events;
     app.settings = b.settings;
     app.system = b.system;
+    app.starred = b.starred;
     app.dirty = Dirty::all();
 }
 

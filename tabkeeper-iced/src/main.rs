@@ -53,6 +53,7 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Route {
     Dashboard,
+    Starred,
     Interests,
     /// An interest's id, or "new".
     Editor(String),
@@ -80,8 +81,10 @@ pub enum Message {
     AddExamples,
     SetEnabled(String, bool),
     SetReversed(String, bool),
+    /// Stars or unstars an item of an interest.
+    ToggleStar(String, Item),
     ConfirmDelete(Option<String>),
-    /// Reordering on the Interests page and the Dashboard.
+    /// Reordering on the Interests, Starred and Dashboard pages.
     DragStart(String),
     DragOver(Option<usize>),
     DragEnd,
@@ -107,11 +110,12 @@ pub struct Dirty {
     pub events: bool,
     pub settings: bool,
     pub system: bool,
+    pub starred: bool,
 }
 
 impl Dirty {
     pub fn all() -> Self {
-        Self { interests: true, states: true, events: true, settings: true, system: true }
+        Self { interests: true, states: true, events: true, settings: true, system: true, starred: true }
     }
 }
 
@@ -122,6 +126,8 @@ pub struct App {
     pub events: Vec<UpdateEvent>,
     pub settings: Settings,
     pub system: SystemStats,
+    /// In the Starred page's order.
+    pub starred: Vec<StarredItem>,
     /// Ids of interests whose script is running right now.
     pub running: HashSet<String>,
     pub session_started: Millis,
@@ -164,6 +170,7 @@ impl App {
             events: storage::load("events"),
             settings: storage::load("settings"),
             system,
+            starred: storage::load("starred"),
             running: HashSet::new(),
             session_started: now_ms(),
             now: now_ms(),
@@ -189,7 +196,10 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let dragging = matches!(self.page, Page::Interests { drag: Some(_), .. } | Page::Dashboard { drag: Some(_) });
+        let dragging = matches!(
+            self.page,
+            Page::Interests { drag: Some(_), .. } | Page::Dashboard { drag: Some(_) } | Page::Starred { drag: Some(_) }
+        );
         Subscription::batch([
             iced::time::every(Duration::from_millis(TICK_MS)).map(|_| Message::Tick),
             iced::system::theme_changes().map(Message::ThemeChanged),
@@ -258,18 +268,24 @@ impl App {
                     self.dirty.interests = true;
                 }
             }
+            Message::ToggleStar(interest_id, item) => {
+                app::toggle_star(&mut self.starred, &self.interests, &interest_id, &item, now_ms());
+                self.dirty.starred = true;
+            }
             Message::ConfirmDelete(id) => {
                 if let Page::Interests { confirm_delete, .. } = &mut self.page {
                     *confirm_delete = id;
                 }
             }
             Message::DragStart(id) => {
-                if let Page::Interests { drag, .. } | Page::Dashboard { drag } = &mut self.page {
+                if let Page::Interests { drag, .. } | Page::Dashboard { drag } | Page::Starred { drag } = &mut self.page {
                     *drag = Some(pages::Drag { id, over: None });
                 }
             }
             Message::DragOver(over) => {
-                if let Page::Interests { drag: Some(d), .. } | Page::Dashboard { drag: Some(d) } = &mut self.page {
+                if let Page::Interests { drag: Some(d), .. } | Page::Dashboard { drag: Some(d) } | Page::Starred { drag: Some(d) } =
+                    &mut self.page
+                {
                     d.over = over;
                 }
             }
@@ -278,6 +294,12 @@ impl App {
                     if let Some(pages::Drag { id, over: Some(to) }) = drag.take() {
                         app::move_interest(&mut self.interests, &id, to);
                         self.dirty.interests = true;
+                    }
+                }
+                Page::Starred { drag } => {
+                    if let Some(pages::Drag { id, over: Some(to) }) = drag.take() {
+                        app::move_starred(&mut self.starred, &id, to);
+                        self.dirty.starred = true;
                     }
                 }
                 Page::Dashboard { drag } => {
@@ -352,6 +374,9 @@ impl App {
         if d.system {
             storage::save("system", &self.system);
         }
+        if d.starred {
+            storage::save("starred", &self.starred);
+        }
     }
 
     // ---- background refreshing ----
@@ -420,6 +445,10 @@ impl App {
         self.dirty.interests = true;
         self.dirty.states = true;
         self.dirty.events = true;
+    }
+
+    pub fn is_starred(&self, interest_id: &str, item_id: &str) -> bool {
+        app::is_starred(&self.starred, interest_id, item_id)
     }
 
     pub fn unread_count(&self, interest_id: Option<&str>) -> usize {
@@ -503,6 +532,7 @@ impl App {
                     .spacing(8)
                     .padding(Padding { top: 4.0, right: 10.0, bottom: 16.0, left: 10.0 }),
                 nav("Dashboard", Route::Dashboard, None),
+                nav("Starred", Route::Starred, Some(muted(self.starred.len().to_string()).into())),
                 nav("Interests", Route::Interests, Some(muted(total.to_string()).into())),
                 nav("Updates", Route::Updates, badge),
                 nav("Stats", Route::Stats, None),

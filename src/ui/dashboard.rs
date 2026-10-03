@@ -182,7 +182,7 @@ fn InterestCard(interest: Interest, index: usize, drag: Signal<Option<Drag>>, cl
                     div { class: "error-box small", "✕ {err}" }
                 }
                 match &st.last_output {
-                    Some(out) => rsx! { OutputView { output: out.clone(), limit: 4, show_image: false, reverse: reversed } },
+                    Some(out) => rsx! { OutputView { output: out.clone(), limit: 4, show_image: false, reverse: reversed, interest_id: interest.id.clone() } },
                     None if running => rsx! { p { class: "muted small", "Running for the first time…" } },
                     None if st.last_error.is_none() => rsx! { p { class: "muted small", "Not checked yet." } },
                     None => rsx! {},

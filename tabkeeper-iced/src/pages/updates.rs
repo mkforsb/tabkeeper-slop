@@ -37,7 +37,7 @@ pub fn view(app: &App, confirm_clear: bool, shown: usize) -> Element<'_> {
         }
         let mut body = column![head, text(e.summary.as_str())].spacing(8);
         if !e.items.is_empty() {
-            body = body.push(Column::with_children(e.items.iter().map(|i| item_row(app, i, true))).spacing(4));
+            body = body.push(Column::with_children(e.items.iter().map(|i| item_row(app, i, true, Some(&e.interest_id)))).spacing(4));
         }
         timeline = timeline.push(panel(if e.read { body.into() } else { unread_marker(body.into()) }));
     }
