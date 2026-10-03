@@ -96,6 +96,9 @@ pub struct InterestState {
     pub last_logs: Vec<String>,
     /// Consecutive failures, used for backoff.
     pub fail_streak: u32,
+    /// Random delay added to the next scheduled refresh, rolled after each
+    /// run; see `Settings::random_delay_mins`.
+    pub delay_ms: Millis,
     pub stats: InterestStats,
 }
 
@@ -132,6 +135,9 @@ pub struct Settings {
     /// Web only: CORS proxy template, e.g. `https://corsproxy.io/?url={url}`.
     pub cors_proxy: String,
     pub concurrency: u32,
+    /// Up to this many minutes, chosen at random, are added to each scheduled
+    /// refresh, so requests don't arrive at exact intervals. 0 = off.
+    pub random_delay_mins: u32,
     pub notifications: bool,
     pub paused: bool,
     pub max_events: u32,
@@ -145,6 +151,7 @@ impl Default for Settings {
         Self {
             cors_proxy: String::new(),
             concurrency: 3,
+            random_delay_mins: 0,
             notifications: true,
             paused: false,
             max_events: 300,

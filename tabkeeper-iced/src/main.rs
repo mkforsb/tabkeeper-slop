@@ -256,7 +256,7 @@ impl App {
                 if self.settings.paused {
                     return Task::none();
                 }
-                let due = app::due_interests(&self.interests, &self.states, &self.running, self.settings.concurrency, self.now);
+                let due = app::due_interests(&self.interests, &self.states, &self.running, &self.settings, self.now);
                 return Task::batch(due.into_iter().map(|id| self.start_run(id)).collect::<Vec<_>>());
             }
             Message::ThemeChanged(mode) => self.mode = mode,
@@ -434,7 +434,8 @@ impl App {
             return Task::none();
         }
         let st = self.states.entry(id).or_default();
-        let event = engine::apply_run(&current, st, &mut self.system, &report, now_ms());
+        let delay = engine::random_delay_ms(self.settings.random_delay_mins);
+        let event = engine::apply_run(&current, st, &mut self.system, &report, now_ms(), delay);
         self.dirty.states = true;
         self.dirty.system = true;
         let Some(event) = event else { return Task::none() };

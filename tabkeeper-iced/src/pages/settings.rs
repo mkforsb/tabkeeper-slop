@@ -1,6 +1,6 @@
 use iced::widget::{checkbox, column, pick_list, row, text, text_editor};
 use iced::{Fill, Font, Task};
-use tabkeeper::app::Backup;
+use tabkeeper::app::{Backup, MAX_RANDOM_DELAY_MINS};
 
 use super::Page;
 use crate::appearance::{self, FontChoice, Scale, SCALES};
@@ -12,6 +12,7 @@ pub struct SettingsPage {
     /// Field texts; the settings hold their last valid (clamped) values.
     concurrency: String,
     max_events: String,
+    random_delay: String,
     export: Option<text_editor::Content>,
     import: text_editor::Content,
     confirm_reset: bool,
@@ -23,6 +24,7 @@ pub struct SettingsPage {
 pub enum Msg {
     Concurrency(String),
     MaxEvents(String),
+    RandomDelay(String),
     /// Shows the clamped values once editing is done.
     Normalize,
     Paused(bool),
@@ -46,6 +48,7 @@ impl SettingsPage {
         Self {
             concurrency: app.settings.concurrency.to_string(),
             max_events: app.settings.max_events.to_string(),
+            random_delay: app.settings.random_delay_mins.to_string(),
             export: None,
             import: text_editor::Content::new(),
             confirm_reset: false,
@@ -80,10 +83,18 @@ pub fn update(app: &mut App, msg: Msg) -> Task<Message> {
             }
             page.max_events = v;
         }
-        Msg::Concurrency(_) | Msg::MaxEvents(_) => {}
+        Msg::RandomDelay(v) if digits(&v) => {
+            if let Ok(n) = v.parse::<u32>() {
+                app.settings.random_delay_mins = n.min(MAX_RANDOM_DELAY_MINS);
+                app.dirty.settings = true;
+            }
+            page.random_delay = v;
+        }
+        Msg::Concurrency(_) | Msg::MaxEvents(_) | Msg::RandomDelay(_) => {}
         Msg::Normalize => {
             page.concurrency = app.settings.concurrency.to_string();
             page.max_events = app.settings.max_events.to_string();
+            page.random_delay = app.settings.random_delay_mins.to_string();
         }
         Msg::Paused(on) => {
             app.settings.paused = on;
@@ -198,8 +209,19 @@ pub fn view<'a>(app: &'a App, page: &'a SettingsPage) -> Element<'a> {
                         .width(180),
                 ]
                 .spacing(4),
+                column![
+                    small("Randomized added delay (minutes, max)").style(style::ink_2),
+                    input("0", &page.random_delay, |v| msg(Msg::RandomDelay(v)))
+                        .on_submit(msg(Msg::Normalize))
+                        .width(250),
+                ]
+                .spacing(4),
             ]
             .spacing(12),
+            muted(
+                "Each scheduled refresh waits up to this many extra minutes, chosen at random, so requests don't arrive at \
+                 exact intervals and look less like a bot. 0 turns it off. Refreshes you start yourself aren't delayed."
+            ),
             checkbox(s.paused).label("Pause all background refreshing").on_toggle(|on| msg(Msg::Paused(on))),
         ]
         .spacing(12),

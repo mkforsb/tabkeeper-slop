@@ -156,7 +156,7 @@ pub fn status_pill<'a>(app: &App, interest: &Interest) -> Element<'a> {
 pub fn timing<'a>(app: &App, interest: &Interest) -> Element<'a> {
     let st = app.state(&interest.id);
     let next = if interest.enabled && !app.settings.paused {
-        format!(" · next {}", fmt_in(engine::next_due(interest, st), app.now))
+        format!(" · next {}", fmt_in(engine::next_due(interest, st, app.settings.random_delay_mins), app.now))
     } else {
         String::new()
     };

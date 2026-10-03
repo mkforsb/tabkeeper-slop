@@ -199,6 +199,7 @@ textarea.code { resize: vertical; line-height: 1.5; tab-size: 4; white-space: pr
 .form-row { display: flex; gap: 12px; align-items: flex-end; }
 .form-row > label { flex: 1; }
 .form-row > label.narrow { flex: 0 0 160px; }
+.form-row > label.narrow.wide { flex-basis: 290px; }
 .form-row > .avatar { margin-bottom: 12px; }
 .form-row.checks { align-items: center; flex-wrap: wrap; }
 .form-row.checks .template { margin-left: auto; flex: 0 1 280px; }

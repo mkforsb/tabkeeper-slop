@@ -121,6 +121,9 @@ pub fn shuffle_cards(order: &mut Vec<String>, interests: &[Interest]) {
     *order = ids;
 }
 
+/// Upper limit for `Settings::random_delay_mins`: a day.
+pub const MAX_RANDOM_DELAY_MINS: u32 = 1440;
+
 /// How many more items each click on an output's "+ N more" shows.
 pub const SHOW_MORE_STEP: usize = 20;
 
@@ -170,14 +173,14 @@ pub fn due_interests(
     interests: &[Interest],
     states: &HashMap<String, InterestState>,
     running: &HashSet<String>,
-    concurrency: u32,
+    settings: &Settings,
     now: Millis,
 ) -> Vec<String> {
-    let slots = (concurrency.max(1) as usize).saturating_sub(running.len());
+    let slots = (settings.concurrency.max(1) as usize).saturating_sub(running.len());
     let mut due: Vec<(i64, String)> = interests
         .iter()
         .filter(|i| i.enabled && !running.contains(&i.id))
-        .map(|i| (engine::next_due(i, &states.get(&i.id).cloned().unwrap_or_default()), i.id.clone()))
+        .map(|i| (engine::next_due(i, &states.get(&i.id).cloned().unwrap_or_default(), settings.random_delay_mins), i.id.clone()))
         .filter(|(at, _)| *at <= now)
         .collect();
     due.sort();

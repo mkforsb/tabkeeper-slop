@@ -81,6 +81,7 @@ pub fn merge_seen(seen: &mut Vec<String>, out: &Output) {
 }
 
 /// Folds a run report into an interest's state and the system stats.
+/// `delay_ms` is added to the next scheduled refresh (see [`next_due`]).
 /// Returns the update event if a change was caught.
 pub fn apply_run(
     interest: &Interest,
@@ -88,9 +89,11 @@ pub fn apply_run(
     sys: &mut SystemStats,
     report: &RunReport,
     now: Millis,
+    delay_ms: Millis,
 ) -> Option<UpdateEvent> {
     let fetched_bytes: u64 = report.fetches.iter().map(|f| f.bytes as u64).sum();
     state.last_run_at = Some(now);
+    state.delay_ms = delay_ms;
     state.last_duration_ms = report.duration_ms;
     state.stats.refreshes += 1;
     state.stats.fetches += report.fetches.len() as u64;
@@ -146,12 +149,22 @@ pub fn apply_run(
 }
 
 /// When the interest should next run: its interval after the last run, with
-/// exponential backoff (capped at 8x, max 24h) while it keeps failing.
-pub fn next_due(interest: &Interest, state: &InterestState) -> Millis {
+/// exponential backoff (capped at 8x, max 24h) while it keeps failing, plus
+/// the random delay rolled after the last run. That delay is capped at
+/// `max_delay_mins`, so lowering the setting applies right away.
+pub fn next_due(interest: &Interest, state: &InterestState, max_delay_mins: u32) -> Millis {
     let Some(last) = state.last_run_at else { return 0 };
     let base = interest.interval_mins.max(1) as i64 * 60_000;
     let factor = 1i64 << state.fail_streak.min(3);
-    last + (base * factor).min(24 * 3_600_000).max(base)
+    let delay = state.delay_ms.clamp(0, max_delay_mins as i64 * 60_000);
+    last + (base * factor).min(24 * 3_600_000).max(base) + delay
+}
+
+/// A random delay of up to `max_mins` minutes, for [`apply_run`].
+pub fn random_delay_ms(max_mins: u32) -> Millis {
+    let max = max_mins as u128 * 60_000;
+    // uuid's random bits stand in for a rand dependency, as in `app::shuffle_cards`.
+    (uuid::Uuid::new_v4().as_u128() % (max + 1)) as Millis
 }
 
 #[cfg(test)]
@@ -206,13 +219,35 @@ mod tests {
         let mut st = InterestState::default();
         let mut sys = SystemStats::default();
         let report = |r: Result<Output, String>| RunReport { result: r, logs: vec![], fetches: vec![], duration_ms: 5, rounds: 1 };
-        assert!(apply_run(&interest, &mut st, &mut sys, &report(Ok(out(&["a"], ""))), 1).is_none());
-        assert!(apply_run(&interest, &mut st, &mut sys, &report(Err("boom".into())), 2).is_none());
+        assert!(apply_run(&interest, &mut st, &mut sys, &report(Ok(out(&["a"], ""))), 1, 0).is_none());
+        assert!(apply_run(&interest, &mut st, &mut sys, &report(Err("boom".into())), 2, 0).is_none());
         assert_eq!(st.fail_streak, 1);
-        let ev = apply_run(&interest, &mut st, &mut sys, &report(Ok(out(&["a", "b"], ""))), 3).unwrap();
+        let ev = apply_run(&interest, &mut st, &mut sys, &report(Ok(out(&["a", "b"], ""))), 3, 0).unwrap();
         assert_eq!(ev.items[0].id, "b");
         assert_eq!((st.stats.refreshes, st.stats.failures, st.stats.updates), (3, 1, 1));
         assert_eq!((sys.refreshes, sys.failures, sys.updates), (3, 1, 1));
         assert_eq!(st.fail_streak, 0);
+    }
+
+    #[test]
+    fn random_delay_is_added_and_capped() {
+        let interest = Interest { interval_mins: 10, ..Default::default() };
+        let mut st = InterestState::default();
+        assert_eq!(next_due(&interest, &st, 5), 0, "never run: due right away");
+        let mut sys = SystemStats::default();
+        let report = RunReport { result: Ok(out(&[], "")), logs: vec![], fetches: vec![], duration_ms: 1, rounds: 1 };
+        apply_run(&interest, &mut st, &mut sys, &report, 1_000, 180_000);
+        assert_eq!(next_due(&interest, &st, 5), 1_000 + 600_000 + 180_000);
+        // Lowering the setting caps a delay that was rolled under the old one.
+        assert_eq!(next_due(&interest, &st, 1), 1_000 + 600_000 + 60_000);
+        assert_eq!(next_due(&interest, &st, 0), 1_000 + 600_000);
+        // Added on top of failure backoff too.
+        st.fail_streak = 1;
+        assert_eq!(next_due(&interest, &st, 5), 1_000 + 1_200_000 + 180_000);
+
+        assert_eq!(random_delay_ms(0), 0);
+        let rolls: Vec<Millis> = (0..200).map(|_| random_delay_ms(2)).collect();
+        assert!(rolls.iter().all(|d| (0..=120_000).contains(d)));
+        assert!(rolls.iter().any(|d| *d != rolls[0]), "rolls vary");
     }
 }

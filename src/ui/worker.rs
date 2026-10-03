@@ -28,7 +28,7 @@ fn tick() {
     if settings.paused {
         return;
     }
-    let due = app::due_interests(&INTERESTS.read(), &STATES.read(), &RUNNING.read(), settings.concurrency, now_ms());
+    let due = app::due_interests(&INTERESTS.read(), &STATES.read(), &RUNNING.read(), &settings, now_ms());
     for id in due {
         start_run(id);
     }
@@ -55,14 +55,15 @@ async fn run_interest(id: String) {
         return;
     }
 
+    let settings = SETTINGS.read().clone();
     let event = {
         let mut states = STATES.write();
         let st = states.entry(id.clone()).or_default();
-        engine::apply_run(&current, st, &mut SYSTEM.write(), &report, now_ms())
+        let delay = engine::random_delay_ms(settings.random_delay_mins);
+        engine::apply_run(&current, st, &mut SYSTEM.write(), &report, now_ms(), delay)
     };
     let Some(event) = event else { return };
 
-    let settings = SETTINGS.read().clone();
     {
         let mut events = EVENTS.write();
         events.insert(0, event.clone());

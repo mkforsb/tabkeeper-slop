@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use tabkeeper::app::MAX_RANDOM_DELAY_MINS;
 
 use super::state::*;
 
@@ -32,6 +33,15 @@ pub fn SettingsPage() -> Element {
                             oninput: move |e| if let Ok(v) = e.value().parse::<u32>() { SETTINGS.write().max_events = v.max(10); },
                             onchange: move |e| if e.value().parse().ok() != Some(SETTINGS.peek().max_events) { rev += 1 } }
                     }
+                    label { class: "narrow wide", "Randomized added delay (minutes, max)"
+                        input { r#type: "number", min: "0", max: "{MAX_RANDOM_DELAY_MINS}", initial_value: "{s.random_delay_mins}",
+                            oninput: move |e| if let Ok(v) = e.value().parse::<u32>() { SETTINGS.write().random_delay_mins = v.min(MAX_RANDOM_DELAY_MINS); },
+                            onchange: move |e| if e.value().parse().ok() != Some(SETTINGS.peek().random_delay_mins) { rev += 1 } }
+                    }
+                }
+                p { class: "small muted",
+                    "Each scheduled refresh waits up to this many extra minutes, chosen at random, so requests don't arrive at exact intervals "
+                    "and look less like a bot. 0 turns it off. Refreshes you start yourself aren't delayed."
                 }
                 label { class: "check",
                     input { r#type: "checkbox", checked: s.paused, onchange: move |e| SETTINGS.write().paused = e.checked() }

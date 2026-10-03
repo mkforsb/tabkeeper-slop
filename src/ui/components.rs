@@ -46,8 +46,9 @@ pub fn Timing(interest: Interest) -> Element {
     let now = NOW();
     let st = STATES.read().get(&interest.id).cloned().unwrap_or_default();
     let checked = fmt_ago(st.last_run_at, now);
-    let next = if interest.enabled && !SETTINGS.read().paused {
-        format!(" · next {}", fmt_in(engine::next_due(&interest, &st), now))
+    let settings = SETTINGS.read();
+    let next = if interest.enabled && !settings.paused {
+        format!(" · next {}", fmt_in(engine::next_due(&interest, &st, settings.random_delay_mins), now))
     } else {
         String::new()
     };
