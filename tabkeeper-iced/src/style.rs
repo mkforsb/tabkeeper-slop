@@ -375,6 +375,29 @@ pub fn star(on: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     }
 }
 
+/// The frame around a row of [`segment`] buttons.
+pub fn segmented(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        background: Some(c.surface.into()),
+        border: Border { color: c.border, width: 1.0, radius: 7.0.into() },
+        ..Default::default()
+    }
+}
+
+/// One choice of a segmented toggle, like a sidebar entry.
+pub fn segment(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let c = colors(theme);
+        let bg = match (active, status) {
+            (true, _) => Some(c.accent_soft.into()),
+            (false, button::Status::Hovered | button::Status::Pressed) => Some(c.surface_2.into()),
+            _ => None,
+        };
+        button::Style { background: bg, text_color: if active { c.ink } else { c.ink_2 }, ..Default::default() }
+    }
+}
+
 /// The "3 new" pill on cards.
 pub fn badge(theme: &Theme, status: button::Status) -> button::Style {
     let c = colors(theme);

@@ -144,6 +144,13 @@ pub struct Settings {
     /// Interest ids in Dashboard order. Interests not listed follow in their
     /// Interests page order; see `app::dashboard_cards`.
     pub dashboard_order: Vec<String>,
+    /// The Starred page shows tiles, one per interest, instead of the list.
+    pub starred_tiles: bool,
+    /// Interest ids in the order of the Starred page's tiles; see `app::starred_tiles`.
+    pub starred_tile_order: Vec<String>,
+    /// Starred entry ids in the order the tiles list them. Independent of the
+    /// Starred list's order.
+    pub starred_item_order: Vec<String>,
 }
 
 impl Default for Settings {
@@ -156,6 +163,9 @@ impl Default for Settings {
             paused: false,
             max_events: 300,
             dashboard_order: Vec::new(),
+            starred_tiles: false,
+            starred_tile_order: Vec::new(),
+            starred_item_order: Vec::new(),
         }
     }
 }

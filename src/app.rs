@@ -89,10 +89,31 @@ pub fn reset_failures(states: &mut HashMap<String, InterestState>, sys: &mut Sys
     }
 }
 
+/// Each id's position in a saved order.
+fn positions(order: &[String]) -> HashMap<&str, usize> {
+    order.iter().enumerate().map(|(k, id)| (id.as_str(), k)).collect()
+}
+
+/// Moves `id` to where `target` is in `ids`; the ids in between shift over.
+/// Returns whether both were found.
+fn move_id(ids: &mut Vec<String>, id: &str, target: &str) -> bool {
+    let (Some(from), Some(to)) = (ids.iter().position(|i| i == id), ids.iter().position(|i| i == target)) else { return false };
+    let moved = ids.remove(from);
+    ids.insert(to, moved);
+    true
+}
+
+/// The ids in random order.
+fn shuffled(mut ids: Vec<String>) -> Vec<String> {
+    // Sorting by fresh random keys is a uniform shuffle without a rand dependency.
+    ids.sort_by_cached_key(|_| uuid::Uuid::new_v4());
+    ids
+}
+
 /// All interests in Dashboard order: those in `order` (as saved in
 /// `Settings::dashboard_order`) first, then the rest in their list order.
 fn dashboard_order<'a>(interests: &'a [Interest], order: &[String]) -> Vec<&'a Interest> {
-    let pos: HashMap<&str, usize> = order.iter().enumerate().map(|(k, id)| (id.as_str(), k)).collect();
+    let pos = positions(order);
     let mut all: Vec<&Interest> = interests.iter().collect();
     all.sort_by_key(|i| pos.get(i.id.as_str()).copied().unwrap_or(usize::MAX));
     all
@@ -107,18 +128,82 @@ pub fn dashboard_cards<'a>(interests: &'a [Interest], order: &[String]) -> Vec<&
 /// Moves card `id` to where card `target` is; the cards in between shift over.
 pub fn move_card(order: &mut Vec<String>, interests: &[Interest], id: &str, target: &str) {
     let mut ids: Vec<String> = dashboard_order(interests, order).into_iter().map(|i| i.id.clone()).collect();
-    let (Some(from), Some(to)) = (ids.iter().position(|i| i == id), ids.iter().position(|i| i == target)) else { return };
-    let moved = ids.remove(from);
-    ids.insert(to, moved);
-    *order = ids;
+    if move_id(&mut ids, id, target) {
+        *order = ids;
+    }
 }
 
 /// Puts the Dashboard cards in random order.
 pub fn shuffle_cards(order: &mut Vec<String>, interests: &[Interest]) {
-    let mut ids: Vec<String> = interests.iter().map(|i| i.id.clone()).collect();
-    // Sorting by fresh random keys is a uniform shuffle without a rand dependency.
-    ids.sort_by_cached_key(|_| uuid::Uuid::new_v4());
-    *order = ids;
+    *order = shuffled(interests.iter().map(|i| i.id.clone()).collect());
+}
+
+/// A tile in the Starred page's tiled view: an interest's starred items.
+pub struct StarredTile<'a> {
+    pub interest_id: &'a str,
+    /// Its name as of the first item starred, for interests since deleted.
+    pub interest_name: &'a str,
+    pub items: Vec<&'a StarredItem>,
+}
+
+/// Interest ids of the Starred tiles in their order: those in `order` (as
+/// saved in `Settings::starred_tile_order`) first, then the rest in the order
+/// they first appear in the Starred list.
+fn starred_tile_ids<'a>(starred: &'a [StarredItem], order: &[String]) -> Vec<&'a str> {
+    let mut ids: Vec<&str> = Vec::new();
+    for s in starred {
+        if !ids.contains(&s.interest_id.as_str()) {
+            ids.push(&s.interest_id);
+        }
+    }
+    let pos = positions(order);
+    ids.sort_by_key(|id| pos.get(id).copied().unwrap_or(usize::MAX));
+    ids
+}
+
+/// All starred items in the tiles' order: those in `order` (as saved in
+/// `Settings::starred_item_order`) by position, after the rest (stars added
+/// since), which come first in Starred list order, as new stars do there.
+fn tile_item_order<'a>(starred: &'a [StarredItem], order: &[String]) -> Vec<&'a StarredItem> {
+    let pos = positions(order);
+    let mut all: Vec<&StarredItem> = starred.iter().collect();
+    all.sort_by_key(|s| pos.get(s.id.as_str()).map_or(0, |p| p + 1));
+    all
+}
+
+/// The Starred page's tiles, one per interest with starred items, each
+/// listing all of them.
+pub fn starred_tiles<'a>(starred: &'a [StarredItem], tile_order: &[String], item_order: &[String]) -> Vec<StarredTile<'a>> {
+    let items = tile_item_order(starred, item_order);
+    starred_tile_ids(starred, tile_order)
+        .into_iter()
+        .map(|id| {
+            let items: Vec<&StarredItem> = items.iter().copied().filter(|s| s.interest_id == id).collect();
+            StarredTile { interest_id: id, interest_name: &items[0].interest_name, items }
+        })
+        .collect()
+}
+
+/// Moves Starred tile `id` to where tile `target` is.
+pub fn move_starred_tile(order: &mut Vec<String>, starred: &[StarredItem], id: &str, target: &str) {
+    let mut ids: Vec<String> = starred_tile_ids(starred, order).into_iter().map(String::from).collect();
+    if move_id(&mut ids, id, target) {
+        *order = ids;
+    }
+}
+
+/// Puts the Starred tiles in random order.
+pub fn shuffle_starred_tiles(order: &mut Vec<String>, starred: &[StarredItem]) {
+    *order = shuffled(starred_tile_ids(starred, order).into_iter().map(String::from).collect());
+}
+
+/// Moves Starred entry `id` to where entry `target` is in the tiles. Both are
+/// in the same tile; the other tiles' items keep their order.
+pub fn move_tile_item(order: &mut Vec<String>, starred: &[StarredItem], id: &str, target: &str) {
+    let mut ids: Vec<String> = tile_item_order(starred, order).into_iter().map(|s| s.id.clone()).collect();
+    if move_id(&mut ids, id, target) {
+        *order = ids;
+    }
 }
 
 /// Upper limit for `Settings::random_delay_mins`: a day.
@@ -335,6 +420,50 @@ mod tests {
         assert_eq!(ids(&starred), "acb");
         toggle_star(&mut starred, &interests, "i", &item("c"), 4);
         assert_eq!(ids(&starred), "ab");
+    }
+
+    #[test]
+    fn starred_tiles_order() {
+        let star = |id: &str, interest: &str| StarredItem {
+            id: id.into(),
+            interest_id: interest.into(),
+            interest_name: interest.to_uppercase(),
+            ..Default::default()
+        };
+        // List order (newest first): a1 b1 a2 c1 a3.
+        let mut starred = vec![star("a1", "a"), star("b1", "b"), star("a2", "a"), star("c1", "c"), star("a3", "a")];
+        let (mut tiles, mut items) = (Vec::new(), Vec::new());
+        let view = |starred: &[StarredItem], tiles: &[String], items: &[String]| {
+            starred_tiles(starred, tiles, items)
+                .iter()
+                .map(|t| format!("{}:{}", t.interest_name, t.items.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(",")))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        // Unordered: tiles by first appearance, items in list order.
+        assert_eq!(view(&starred, &tiles, &items), "A:a1,a2,a3 B:b1 C:c1");
+
+        move_tile_item(&mut items, &starred, "a3", "a1");
+        assert_eq!(view(&starred, &tiles, &items), "A:a3,a1,a2 B:b1 C:c1");
+        move_tile_item(&mut items, &starred, "a3", "a2");
+        assert_eq!(view(&starred, &tiles, &items), "A:a1,a2,a3 B:b1 C:c1");
+        move_starred_tile(&mut tiles, &starred, "c", "a");
+        assert_eq!(view(&starred, &tiles, &items), "C:c1 A:a1,a2,a3 B:b1");
+
+        // A new star goes to the top of its tile; a new interest's tile goes last.
+        starred.insert(0, star("a4", "a"));
+        starred.insert(0, star("d1", "d"));
+        assert_eq!(view(&starred, &tiles, &items), "C:c1 A:a4,a1,a2,a3 B:b1 D:d1");
+        // The list's order is untouched by all this.
+        assert_eq!(starred.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(","), "d1,a4,a1,b1,a2,c1,a3");
+        // Moving across tiles is ignored by the UI; unstarred ids are dropped.
+        starred.retain(|s| s.id != "a2");
+        assert_eq!(view(&starred, &tiles, &items), "C:c1 A:a4,a1,a3 B:b1 D:d1");
+
+        shuffle_starred_tiles(&mut tiles, &starred);
+        let mut sorted = tiles.clone();
+        sorted.sort();
+        assert_eq!(sorted.join(""), "abcd");
     }
 
     #[test]

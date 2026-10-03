@@ -93,6 +93,12 @@ pub enum Message {
     DragStart(String),
     DragOver(Option<usize>),
     DragEnd,
+    /// Reordering a starred item within its tile; ends with `DragEnd`.
+    ItemDragStart(String),
+    ItemDragOver(Option<usize>),
+    /// Shows the Starred page's tiles (or the list).
+    SetStarredTiles(bool),
+    ShuffleStarredTiles,
     Delete(String),
     ConfirmClear(bool),
     ClearEvents,
@@ -217,7 +223,10 @@ impl App {
     fn subscription(&self) -> Subscription<Message> {
         let dragging = matches!(
             self.page,
-            Page::Interests { drag: Some(_), .. } | Page::Dashboard { drag: Some(_) } | Page::Starred { drag: Some(_) }
+            Page::Interests { drag: Some(_), .. }
+                | Page::Dashboard { drag: Some(_) }
+                | Page::Starred { drag: Some(_), .. }
+                | Page::Starred { item_drag: Some(_), .. }
         );
         Subscription::batch([
             iced::time::every(Duration::from_millis(TICK_MS)).map(|_| Message::Tick),
@@ -307,12 +316,12 @@ impl App {
                 }
             }
             Message::DragStart(id) => {
-                if let Page::Interests { drag, .. } | Page::Dashboard { drag } | Page::Starred { drag } = &mut self.page {
+                if let Page::Interests { drag, .. } | Page::Dashboard { drag } | Page::Starred { drag, .. } = &mut self.page {
                     *drag = Some(pages::Drag { id, over: None });
                 }
             }
             Message::DragOver(over) => {
-                if let Page::Interests { drag: Some(d), .. } | Page::Dashboard { drag: Some(d) } | Page::Starred { drag: Some(d) } =
+                if let Page::Interests { drag: Some(d), .. } | Page::Dashboard { drag: Some(d) } | Page::Starred { drag: Some(d), .. } =
                     &mut self.page
                 {
                     d.over = over;
@@ -325,10 +334,28 @@ impl App {
                         self.dirty.interests = true;
                     }
                 }
-                Page::Starred { drag } => {
+                Page::Starred { drag, item_drag } => {
+                    let s = &mut self.settings;
                     if let Some(pages::Drag { id, over: Some(to) }) = drag.take() {
-                        app::move_starred(&mut self.starred, &id, to);
-                        self.dirty.starred = true;
+                        if s.starred_tiles {
+                            let tiles = app::starred_tiles(&self.starred, &s.starred_tile_order, &[]);
+                            if let Some(target) = tiles.get(to).map(|t| t.interest_id.to_string()) {
+                                app::move_starred_tile(&mut s.starred_tile_order, &self.starred, &id, &target);
+                                self.dirty.settings = true;
+                            }
+                        } else {
+                            app::move_starred(&mut self.starred, &id, to);
+                            self.dirty.starred = true;
+                        }
+                    }
+                    // `to` is a position in the dragged item's tile.
+                    if let Some(pages::Drag { id, over: Some(to) }) = item_drag.take() {
+                        let tiles = app::starred_tiles(&self.starred, &s.starred_tile_order, &s.starred_item_order);
+                        let tile = tiles.iter().find(|t| t.items.iter().any(|i| i.id == id));
+                        if let Some(target) = tile.and_then(|t| t.items.get(to)).map(|i| i.id.clone()) {
+                            app::move_tile_item(&mut s.starred_item_order, &self.starred, &id, &target);
+                            self.dirty.settings = true;
+                        }
                     }
                 }
                 Page::Dashboard { drag } => {
@@ -342,6 +369,24 @@ impl App {
                 }
                 _ => {}
             },
+            Message::ItemDragStart(id) => {
+                if let Page::Starred { item_drag, .. } = &mut self.page {
+                    *item_drag = Some(pages::Drag { id, over: None });
+                }
+            }
+            Message::ItemDragOver(over) => {
+                if let Page::Starred { item_drag: Some(d), .. } = &mut self.page {
+                    d.over = over;
+                }
+            }
+            Message::SetStarredTiles(on) => {
+                self.settings.starred_tiles = on;
+                self.dirty.settings = true;
+            }
+            Message::ShuffleStarredTiles => {
+                app::shuffle_starred_tiles(&mut self.settings.starred_tile_order, &self.starred);
+                self.dirty.settings = true;
+            }
             Message::ResetFailures => {
                 app::reset_failures(&mut self.states, &mut self.system);
                 self.dirty.states = true;

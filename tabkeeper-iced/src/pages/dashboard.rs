@@ -8,9 +8,9 @@ use super::Drag;
 use crate::widgets::*;
 use crate::{App, Message, Route};
 
-const CARD_MIN_WIDTH: f32 = 320.0;
+pub const CARD_MIN_WIDTH: f32 = 320.0;
 const FEED_WIDTH: f32 = 300.0;
-const GAP: f32 = 14.0;
+pub const GAP: f32 = 14.0;
 
 pub fn view<'a>(app: &'a App, drag: Option<&Drag>) -> Element<'a> {
     let now = app.now;
@@ -98,10 +98,20 @@ fn dash<'a>(app: &'a App, drag: Option<&Drag>) -> Element<'a> {
 
 /// How a card is drawn while one is being dragged.
 #[derive(Clone, Copy, PartialEq)]
-enum CardLook {
+pub enum CardLook {
     Normal,
     DragSource,
     DropTarget,
+}
+
+impl CardLook {
+    pub fn style(self) -> fn(&iced::Theme) -> iced::widget::container::Style {
+        match self {
+            CardLook::Normal => style::panel,
+            CardLook::DragSource => style::card_drag_source,
+            CardLook::DropTarget => style::card_drop_target,
+        }
+    }
 }
 
 fn card<'a>(app: &'a App, interest: &'a Interest, look: CardLook) -> Element<'a> {
@@ -165,11 +175,7 @@ fn card<'a>(app: &'a App, interest: &'a Interest, look: CardLook) -> Element<'a>
         container(foot).padding([8, 14]),
     ])
     .width(Fill)
-    .style(match look {
-        CardLook::Normal => style::panel,
-        CardLook::DragSource => style::card_drag_source,
-        CardLook::DropTarget => style::card_drop_target,
-    })
+    .style(look.style())
     .into()
 }
 

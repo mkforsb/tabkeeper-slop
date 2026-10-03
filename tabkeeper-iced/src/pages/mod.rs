@@ -25,7 +25,8 @@ pub struct Drag {
 /// The current page and its view state.
 pub enum Page {
     Dashboard { drag: Option<Drag> },
-    Starred { drag: Option<Drag> },
+    /// `drag`: a list row or a tile; `item_drag`: an item within its tile.
+    Starred { drag: Option<Drag>, item_drag: Option<Drag> },
     /// `confirm_delete`: the interest whose Delete button was clicked.
     Interests { confirm_delete: Option<String>, drag: Option<Drag> },
     Editor(Box<editor::Editor>),
@@ -41,7 +42,7 @@ impl Page {
     pub fn open(app: &App, route: Route) -> Page {
         match route {
             Route::Dashboard => Page::Dashboard { drag: None },
-            Route::Starred => Page::Starred { drag: None },
+            Route::Starred => Page::Starred { drag: None, item_drag: None },
             Route::Interests => Page::Interests { confirm_delete: None, drag: None },
             Route::Editor(id) => editor::Editor::open(app, &id).map(|e| Page::Editor(Box::new(e))).unwrap_or(Page::NotFound),
             Route::Updates => Page::Updates { confirm_clear: false, shown: updates::PAGE_SIZE, target: None },
@@ -75,7 +76,7 @@ pub fn modal(app: &App) -> Option<Element<'_>> {
 pub fn view(app: &App) -> Element<'_> {
     match &app.page {
         Page::Dashboard { drag } => dashboard::view(app, drag.as_ref()),
-        Page::Starred { drag } => starred::view(app, drag.as_ref()),
+        Page::Starred { drag, item_drag } => starred::view(app, drag.as_ref(), item_drag.as_ref()),
         Page::Interests { confirm_delete, drag } => interests::view(app, confirm_delete.as_deref(), drag.as_ref()),
         Page::Editor(e) => editor::view(app, e),
         Page::NotFound => panel(
