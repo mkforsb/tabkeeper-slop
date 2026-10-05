@@ -133,6 +133,206 @@ let posts = user.edge_owner_to_timeline_media.edges.map(|e| {
 "#,
     },
     Template {
+        key: "github-reviews",
+        label: "GitHub: PRs awaiting your review (needs token)",
+        name: "GitHub review requests",
+        interval_mins: 15,
+        script: r#"// Open pull requests where your review is requested, via GitHub's GraphQL API.
+// Needs a personal access token (GitHub → Settings → Developer settings):
+//   fine-grained: Repository permissions → Pull requests: Read-only. It covers
+//     one owner (you or one org), and orgs may have to approve it;
+//   classic: the `repo` scope (or no scope for public repos only). Works across
+//     orgs; authorize it for SSO if an org uses SAML.
+// The token is stored in plain text with the script and included in Export.
+// On web, a configured CORS proxy sees the token. api.github.com allows CORS,
+// so clear the proxy setting, or use the desktop app.
+let token = "";
+// review-requested:@me includes requests to your teams;
+// user-review-requested:@me only counts requests to you personally.
+let query = "is:pr is:open archived:false review-requested:@me sort:updated-desc";
+
+if token == "" { throw "set `token` in the script first"; }
+
+let gql = `query($q: String!) {
+  viewer { login avatarUrl }
+  search(query: $q, type: ISSUE, first: 50) {
+    nodes {
+      ... on PullRequest {
+        url title number isDraft createdAt
+        repository { nameWithOwner }
+        author { login avatarUrl }
+        timelineItems(itemTypes: [REVIEW_REQUESTED_EVENT], last: 20) {
+          nodes { ... on ReviewRequestedEvent { createdAt requestedReviewer { ... on User { login } } } }
+        }
+      }
+    }
+  }
+}`;
+
+let resp = fetch_json("https://api.github.com/graphql", #{
+    method: "POST",
+    body: #{ query: gql, variables: #{ q: query } },
+    headers: #{ "authorization": "Bearer " + token },
+    allow_error: true,
+});
+// HTTP errors carry `message`, GraphQL errors an `errors` array.
+let errors = (resp.errors ?? []).map(|e| e.message);
+if resp.message != () { errors.push(resp.message); }
+if resp.data == () {
+    throw "GitHub: " + if errors.is_empty() { to_json(resp) } else { errors[0] };
+}
+// Partial results, e.g. an org that needs SSO authorization for the token.
+for e in errors { log("GitHub: " + e); }
+
+let me = resp.data.viewer;
+let prs = resp.data.search.nodes.filter(|pr| pr?.url != ());
+
+// When you were last asked to review, so a re-request after you've reviewed
+// gets a new item id and counts as an update. Requests to a team have no
+// login to match, so those only count when the PR first shows up.
+fn requested_at(pr, login) {
+    let at = ();
+    for e in pr.timelineItems.nodes {
+        if e?.requestedReviewer?.login == login { at = e.createdAt; }
+    }
+    at
+}
+
+#{
+    title: "Review requests",
+    url: "https://github.com/pulls/review-requested",
+    image: me.avatarUrl,
+    items: prs.map(|pr| {
+        let at = requested_at(pr, me.login);
+        let draft = if pr.isDraft { " · draft" } else { "" };
+        #{
+            id: if at == () { pr.url } else { pr.url + "@" + at },
+            url: pr.url,
+            title: pr.title,
+            image: pr.author?.avatarUrl,
+            text: pr.repository.nameWithOwner + " #" + pr.number + " by " + (pr.author?.login ?? "ghost") + draft,
+            date: at ?? pr.createdAt,
+        }
+    }),
+}
+"#,
+    },
+    Template {
+        key: "github-comments",
+        label: "GitHub: new PR comments (needs token)",
+        name: "GitHub PR comments",
+        interval_mins: 15,
+        script: r#"// New comments on GitHub pull requests: conversation comments, reviews and
+// inline review comments, via GitHub's GraphQL API. Your own are left out.
+// Needs a personal access token, like the "PRs awaiting your review" template:
+// fine-grained with Pull requests: Read-only, or classic with the `repo` scope.
+// The token is stored in plain text with the script and included in Export.
+// On web, a configured CORS proxy sees the token.
+let token = "";
+// Which pull requests to watch:
+//   author:@me    your own PRs
+//   involves:@me  PRs you authored, are assigned to, commented on or are mentioned in
+//   mentions:@me  PRs that @-mention you
+// Narrow it with e.g. repo:owner/name or org:name; drop is:open to include
+// closed PRs. Keep sort:updated-desc so recently active PRs come first.
+let query = "is:pr is:open involves:@me sort:updated-desc";
+let ignore_bots = true;   // CI, dependency update bots and the like
+
+if token == "" { throw "set `token` in the script first"; }
+
+let gql = `query($q: String!) {
+  viewer { login }
+  search(query: $q, type: ISSUE, first: 25) {
+    nodes {
+      ... on PullRequest {
+        url title number
+        repository { nameWithOwner }
+        comments(last: 10) { nodes { ...c url } }
+        reviews(last: 10) { nodes { ...c url state submittedAt } }
+        reviewThreads(last: 20) { nodes { path comments(last: 5) { nodes { ...c url } } } }
+      }
+    }
+  }
+}
+fragment c on Comment { id body createdAt author { __typename login avatarUrl } }`;
+
+let resp = fetch_json("https://api.github.com/graphql", #{
+    method: "POST",
+    body: #{ query: gql, variables: #{ q: query } },
+    headers: #{ "authorization": "Bearer " + token },
+    allow_error: true,
+});
+// HTTP errors carry `message`, GraphQL errors an `errors` array.
+let errors = (resp.errors ?? []).map(|e| e.message);
+if resp.message != () { errors.push(resp.message); }
+if resp.data == () {
+    throw "GitHub: " + if errors.is_empty() { to_json(resp) } else { errors[0] };
+}
+// Partial results, e.g. an org that needs SSO authorization for the token.
+for e in errors { log("GitHub: " + e); }
+
+let me = resp.data.viewer.login;
+
+fn skip(c, me, ignore_bots) {
+    c == () || c.author?.login == me || (ignore_bots && c.author?.__typename == "Bot")
+}
+
+fn excerpt(body) {
+    let s = squish(regex_replace(body ?? "", "(?s)<!--.*?-->", ""));
+    if s.len() > 300 { s.sub_string(0, 300) + "…" } else { s }
+}
+
+fn entry(c, pr, verb) {
+    let text = pr.repository.nameWithOwner + " #" + pr.number;
+    let body = excerpt(c.body);
+    if body != "" { text += " · " + body; }
+    #{
+        id: c.id,
+        url: c.url,
+        title: (c.author?.login ?? "ghost") + " " + verb + " " + pr.title,
+        text: text,
+        image: c.author?.avatarUrl,
+        date: c.submittedAt ?? c.createdAt,
+    }
+}
+
+let items = [];
+for pr in resp.data.search.nodes {
+    if pr?.url == () { continue; }
+    for c in pr.comments.nodes {
+        if !skip(c, me, ignore_bots) { items.push(entry(c, pr, "commented on")); }
+    }
+    for r in pr.reviews.nodes {
+        if skip(r, me, ignore_bots) { continue; }
+        let verb = switch r.state {
+            "APPROVED" => "approved",
+            "CHANGES_REQUESTED" => "requested changes on",
+            // Without a summary, a comment-only review just wraps inline
+            // comments, which are listed on their own.
+            "COMMENTED" => if excerpt(r.body) == "" { () } else { "reviewed" },
+            _ => (),
+        };
+        if verb != () { items.push(entry(r, pr, verb)); }
+    }
+    for t in pr.reviewThreads.nodes {
+        for c in t?.comments?.nodes ?? [] {
+            if !skip(c, me, ignore_bots) { items.push(entry(c, pr, "commented on " + t.path + " in")); }
+        }
+    }
+}
+// Newest first. Inline comments in older threads (beyond the last 20 per PR)
+// aren't fetched.
+items.sort(|a, b| if a.date > b.date { -1 } else if a.date < b.date { 1 } else { 0 });
+items.truncate(60);
+
+#{
+    title: "PR comments",
+    url: "https://github.com/pulls?q=" + url_encode(query),
+    items: items,
+}
+"#,
+    },
+    Template {
         key: "biorio",
         label: "Bio Rio: reRUN screenings",
         name: "Bio Rio reRUN",

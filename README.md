@@ -122,6 +122,8 @@ stopped), 8 MB per response.
 | SoundCloud new tracks | `/tracks` page's `<noscript>` track list | works |
 | SoundCloud bio edited | `window.__sc_hydration` JSON → `description` | works |
 | Instagram new posts | `web_profile_info` API with your `sessionid` cookie | untested; needs login, desktop only |
+| GitHub review requests | GraphQL `search` for `review-requested:@me` with a personal access token | untested against the live API; needs token |
+| GitHub PR comments | GraphQL `search` for e.g. `involves:@me`, with comments, reviews and review threads | untested against the live API; needs token |
 | Bio Rio reRUN | `article.showtime-card` | works |
 | Bio Aspen Classics | `div.movie > a` | works |
 | Slakthuset events | `main li a[href^='/event/']` | works |
