@@ -66,14 +66,14 @@ pub fn detect(prev: Option<&Output>, seen: &[String], new: &Output) -> Option<Ch
     Some(Change { summary: parts.join(" · "), items: fresh })
 }
 
+/// Records the output's item ids in `seen`, ordered by when they were last
+/// seen: ids in this output move to the end, so the cap drops ids that have
+/// left the output, never current ones (unless the output alone exceeds it).
 pub fn merge_seen(seen: &mut Vec<String>, out: &Output) {
-    let known: HashSet<String> = seen.iter().cloned().collect();
-    let mut added = HashSet::new();
-    for item in &out.items {
-        if !item.id.is_empty() && !known.contains(&item.id) && added.insert(item.id.clone()) {
-            seen.push(item.id.clone());
-        }
-    }
+    let mut current = HashSet::new();
+    let ids: Vec<&String> = out.items.iter().map(|i| &i.id).filter(|id| !id.is_empty() && current.insert(id.as_str())).collect();
+    seen.retain(|id| !current.contains(id.as_str()));
+    seen.extend(ids.into_iter().cloned());
     if seen.len() > MAX_SEEN {
         let excess = seen.len() - MAX_SEEN;
         seen.drain(..excess);
@@ -200,6 +200,25 @@ mod tests {
     fn items_that_reappear_are_not_new() {
         let seen = vec!["a".to_string(), "b".to_string()];
         assert_eq!(detect(Some(&out(&["b"], "")), &seen, &out(&["a", "b"], "")), None);
+    }
+
+    #[test]
+    fn seen_cap_drops_ids_that_left_the_output() {
+        let mut prev = out(&["keep", "old"], "");
+        let mut seen = Vec::new();
+        merge_seen(&mut seen, &prev);
+        // "keep" stays in the output while more than MAX_SEEN other ids come and go.
+        for n in 0..MAX_SEEN + 10 {
+            let id = n.to_string();
+            let new = out(&["keep", &id, &id], "");
+            let change = detect(Some(&prev), &seen, &new).unwrap();
+            assert_eq!(change.items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(), [id.as_str()]);
+            merge_seen(&mut seen, &new);
+            prev = new;
+        }
+        assert_eq!(seen.len(), MAX_SEEN);
+        assert!(!seen.contains(&"old".to_string()));
+        assert_eq!(seen.iter().filter(|id| *id == "keep").count(), 1);
     }
 
     #[test]
