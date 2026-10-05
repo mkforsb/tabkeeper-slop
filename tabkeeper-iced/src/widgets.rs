@@ -67,7 +67,7 @@ pub fn input<'a>(placeholder: &str, value: &str, on_input: impl Fn(String) -> Me
 
 /// Opens `url` in the system browser; plain text if there's no URL.
 pub fn ext_link<'a>(label: impl text::IntoFragment<'a>, url: &str, font: iced::Font) -> Element<'a> {
-    let t = text(label).font(font);
+    let t = text(label).font(font).wrapping(text::Wrapping::WordOrGlyph);
     if url.is_empty() {
         t.into()
     } else {
@@ -211,7 +211,7 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool, star: Option<&str>) -> 
         body = body.push(muted(fmt_item_date(&item.date)));
     }
     if !item.text.is_empty() && item.text != title {
-        body = body.push(text(clamp(&item.text, 220)).size(SMALL).style(style::ink_2));
+        body = body.push(text(clamp(&item.text, 220)).size(SMALL).style(style::ink_2).wrapping(text::Wrapping::WordOrGlyph));
     }
     let mut r = row![].spacing(10);
     if let Some(interest_id) = star {
@@ -253,7 +253,7 @@ pub fn output_view<'a>(
         col = col.push(ext_link(output.title.as_str(), &output.url, bold()));
     }
     if !output.text.is_empty() {
-        col = col.push(text(clamp(&output.text, 600)).style(style::ink_2));
+        col = col.push(text(clamp(&output.text, 600)).style(style::ink_2).wrapping(text::Wrapping::WordOrGlyph));
     }
     if let Some(key) = &output.key {
         col = col.push(muted(format!("key: {key}")));
