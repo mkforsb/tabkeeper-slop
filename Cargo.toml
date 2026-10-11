@@ -32,6 +32,10 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli"] }
 
+[dev-dependencies]
+# Validates docs/script-output.schema.json in tests.
+jsonschema = { version = "0.58", default-features = false }
+
 # Native (desktop) only
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }

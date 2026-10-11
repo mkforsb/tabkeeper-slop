@@ -10,7 +10,13 @@ user data directory (desktop).
 
 ## Running
 
-Requires the Dioxus CLI (`dx`, 0.7).
+Requires a stable Rust toolchain and a C compiler (`cc`, used to build `ring`);
+that's enough for `cargo test` and the `run_script` example. The Dioxus app
+also needs the Dioxus CLI (`dx`, 0.7).
+
+```sh
+curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal   # Rust via rustup
+```
 
 ```sh
 dx serve --platform desktop      # desktop app
@@ -83,8 +89,13 @@ let doc = html(fetch("https://slakthusetclub.se/events"));
 ```
 
 Output fields: `title`, `text`, `image`, `url`, `items` (each with `id`, `title`,
-`url`, `image`, `text`, `date`; `id` defaults to `url`, then `title`), and an
-optional `key`. The dashboard renders all of them.
+`url`, `image`, `text`, `date`; `id` defaults to `url`, then `title`, then
+`text`), and an optional `key`. The dashboard renders all of them. A bare array
+is shorthand for `#{ items: [...] }`, and any other value for `#{ text: ... }`.
+[`docs/script-output.schema.json`](docs/script-output.schema.json) is a JSON
+Schema for the output, with `()` as `null`. It is a little stricter than the
+app: it rejects unknown fields and maps or arrays in text fields, which the app
+ignores or writes out as JSON.
 
 **Change detection.** The first successful run sets a baseline. After that, an
 update is reported when an item id appears that hasn't been seen before, or
@@ -148,6 +159,8 @@ src/
   notify.rs        notify-rust / Notification API
   main.rs          Dioxus launch (desktop window / web)
   ui/              Dioxus pages, global signals, background worker
+docs/
+  script-output.schema.json  JSON Schema for a script's output
 tabkeeper-iced/
   src/main.rs      Iced app: state, messages, worker, persistence, shell
   src/pages/       one module per page

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tabkeeper Interest script output",
+  "description": "The value of an Interest script's last expression, with Rhai values mapped to JSON (() is null). See `script::to_output`. The app is more lenient than this schema: it accepts any value in any field. The schema rejects only what is almost certainly a mistake: a map or array in a text field, and unknown fields, which the app ignores.",
+  "oneOf": [
+    { "$ref": "#/$defs/output" },
+    {
+      "description": "Shorthand for #{ items: [...] }.",
+      "$ref": "#/$defs/items",
+      "type": "array"
+    },
+    {
+      "description": "Shorthand for #{ text: ... }.",
+      "type": ["string", "number", "boolean"]
+    }
+  ],
+  "$defs": {
+    "text": {
+      "description": "Stored as a string. () is \"\". Cut to 2000 characters plus '…'.",
+      "type": ["string", "number", "boolean", "null"]
+    },
+    "output": {
+      "type": "object",
+      "properties": {
+        "title": { "$ref": "#/$defs/text" },
+        "text": {
+          "$ref": "#/$defs/text",
+          "description": "A change counts as an update, unless `key` is set."
+        },
+        "image": { "$ref": "#/$defs/text", "description": "Image URL." },
+        "url": { "$ref": "#/$defs/text" },
+        "items": { "$ref": "#/$defs/items" },
+        "key": {
+          "description": "If set, an update is reported exactly when `key` changes; items and text are not diffed. () means unset. Not cut to 2000 characters.",
+          "type": ["string", "number", "boolean", "null"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "items": {
+      "description": "() entries are dropped, then the first 200 are kept. () is no items.",
+      "type": ["array", "null"],
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/item" },
+          {
+            "description": "Shorthand for #{ title: ... }. () is dropped.",
+            "type": ["string", "number", "boolean", "null"]
+          }
+        ]
+      }
+    },
+    "item": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text",
+          "description": "Stable identity used to detect new items. If empty, the first non-empty of `url`, `title`, `text`."
+        },
+        "title": { "$ref": "#/$defs/text" },
+        "url": { "$ref": "#/$defs/text" },
+        "image": { "$ref": "#/$defs/text", "description": "Image URL." },
+        "text": { "$ref": "#/$defs/text" },
+        "date": { "$ref": "#/$defs/text", "description": "Shown as-is; not parsed." }
+      },
+      "additionalProperties": false
+    }
+  }
+}

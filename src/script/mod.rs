@@ -93,6 +93,17 @@ fn eval_once(
     prev: Option<serde_json::Value>,
     cache: FetchCache,
 ) -> (Result<Output, String>, BTreeSet<FetchRequest>, Vec<String>) {
+    let (result, pending, logs) = eval_value(script, name, prev, cache);
+    (result.and_then(to_output), pending, logs)
+}
+
+/// [`eval_once`] without the conversion to [`Output`].
+fn eval_value(
+    script: &str,
+    name: &str,
+    prev: Option<serde_json::Value>,
+    cache: FetchCache,
+) -> (Result<Dynamic, String>, BTreeSet<FetchRequest>, Vec<String>) {
     let pending = Rc::new(RefCell::new(BTreeSet::new()));
     let logs = Rc::new(RefCell::new(Vec::new()));
     let engine = build_engine(Rc::new(cache), pending.clone(), logs.clone());
@@ -103,12 +114,7 @@ fn eval_once(
     scope.push_constant("NAME", name.to_string());
 
     let result = engine.eval_with_scope::<Dynamic>(&mut scope, script);
-    let pending = pending.take();
-    let result = match result {
-        Ok(v) => to_output(v),
-        Err(e) => Err(describe_error(&e)),
-    };
-    (result, pending, logs.take())
+    (result.map_err(|e| describe_error(&e)), pending.take(), logs.take())
 }
 
 fn describe_error(e: &EvalAltResult) -> String {
@@ -478,5 +484,99 @@ mod tests {
     #[test]
     fn runaway_scripts_are_stopped() {
         assert!(eval("loop {}", Default::default()).0.unwrap_err().to_lowercase().contains("too many operations"));
+    }
+
+    /// docs/script-output.schema.json against the code it documents.
+    mod schema {
+        use super::*;
+
+        fn validator() -> jsonschema::Validator {
+            let schema: serde_json::Value = serde_json::from_str(include_str!("../../docs/script-output.schema.json")).unwrap();
+            jsonschema::meta::validate(&schema).unwrap();
+            jsonschema::draft202012::new(&schema).unwrap()
+        }
+
+        /// Validates a script's final value, as JSON, and checks that the app accepts it.
+        fn check(script: &str, cache: FetchCache) -> Result<(), Vec<String>> {
+            let (res, pending, _) = eval_value(script, "test", None, cache);
+            assert!(pending.is_empty(), "uncached fetches: {pending:?}");
+            let value = res.unwrap();
+            let json = serde_json::to_value(&value).unwrap();
+            let errors: Vec<String> = validator().iter_errors(&json).map(|e| format!("{}: {e}", e.instance_path())).collect();
+            if errors.is_empty() {
+                to_output(value).unwrap();
+                Ok(())
+            } else {
+                Err(errors)
+            }
+        }
+
+        #[test]
+        fn lists_the_output_fields() {
+            let schema: serde_json::Value = serde_json::from_str(include_str!("../../docs/script-output.schema.json")).unwrap();
+            let keys = |v: serde_json::Value| v.as_object().unwrap().keys().cloned().collect::<BTreeSet<_>>();
+            let output = Output { key: Some(String::new()), ..Default::default() };
+            assert_eq!(keys(schema["$defs"]["output"]["properties"].clone()), keys(serde_json::to_value(output).unwrap()));
+            assert_eq!(keys(schema["$defs"]["item"]["properties"].clone()), keys(serde_json::to_value(Item::default()).unwrap()));
+        }
+
+        #[test]
+        fn accepts_what_the_app_reads() {
+            for script in [
+                r#"#{ title: "T", text: "x", image: (), url: "u", key: (),
+                      items: [#{ id: 1, title: "a", url: "u", image: (), text: "t", date: "d" }, "b", 3, ()] }"#,
+                "#{}",
+                "#{ items: (), key: 7 }",
+                r#"[#{ title: "a" }, "b"]"#,
+                r#""hi""#,
+                "42",
+                "true",
+            ] {
+                check(script, Default::default()).unwrap_or_else(|e| panic!("{script}: {e:?}"));
+            }
+        }
+
+        #[test]
+        fn rejects_likely_mistakes() {
+            for script in [
+                "()",
+                r#"#{ link: "u" }"#,
+                r#"#{ items: [#{ name: "a" }] }"#,
+                "#{ title: #{ a: 1 } }",
+                "#{ text: [1] }",
+                "#{ items: [[1]] }",
+                r#"#{ items: "a" }"#,
+            ] {
+                assert!(check(script, Default::default()).is_err(), "{script}");
+            }
+        }
+
+        #[test]
+        fn templates_match() {
+            let page = r#"<html><head><title>Example</title></head>
+                <body><main><p>Hi <a href="/a">A</a></p></main></body></html>"#;
+            let channel = r#"<meta property="og:image" content="https://i.test/c.jpg"> {"externalId":"UC1"}"#;
+            let atom = r#"<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+                <title>Chan</title><link rel="alternate" href="https://c.test/"/>
+                <entry><id>yt:video:1</id><title>V1</title><link rel="alternate" href="https://c.test/v1"/></entry></feed>"#;
+            let rss = r#"<rss version="2.0"><channel><title>R</title><link>https://r.test</link>
+                <item><title>T1</title><link>https://r.test/1</link></item></channel></rss>"#;
+            let films = r#"<div class="movie"><a href="https://f.test/1" title="F1"><img src="https://f.test/1.jpg"></a></div>"#;
+            let responses = [
+                ("https://example.com/", page),
+                ("https://example.com/feed.xml", rss),
+                ("https://www.youtube.com/@LinusTechTips", channel),
+                ("https://www.youtube.com/feeds/videos.xml?channel_id=UC1", atom),
+                ("https://www.bioaspen.se/visningar/classics/", films),
+            ];
+            let cache: FetchCache = responses
+                .into_iter()
+                .map(|(url, body)| (FetchRequest::get(url), Ok(FetchResponse { status: 200, body: body.into() })))
+                .collect();
+            for key in ["youtube", "bioaspen", "feed", "page-section", "links"] {
+                let t = crate::templates::find(key).unwrap();
+                check(t.script, cache.clone()).unwrap_or_else(|e| panic!("{key}: {e:?}"));
+            }
+        }
     }
 }
