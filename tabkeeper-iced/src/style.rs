@@ -418,6 +418,27 @@ pub fn toast_button(theme: &Theme, _status: button::Status) -> button::Style {
     }
 }
 
+/// The menu of a [`crate::popup`], like `.popup-menu`.
+pub fn popup(theme: &Theme) -> container::Style {
+    let c = colors(theme);
+    container::Style {
+        background: Some(c.surface.into()),
+        border: Border { color: c.border, width: 1.0, radius: 7.0.into() },
+        shadow: Shadow { color: Color::BLACK.scale_alpha(0.15), offset: Vector::new(0.0, 2.0), blur_radius: 8.0 },
+        ..Default::default()
+    }
+}
+
+/// A link in a [`popup`] menu.
+pub fn menu_item(theme: &Theme, status: button::Status) -> button::Style {
+    let c = colors(theme);
+    let bg = match status {
+        button::Status::Hovered | button::Status::Pressed => Some(c.accent_soft.into()),
+        _ => None,
+    };
+    button::Style { background: bg, text_color: c.accent, border: border::rounded(5), ..Default::default() }
+}
+
 /// The drop-down of a pick list.
 pub fn menu(theme: &Theme) -> widget::overlay::menu::Style {
     let c = colors(theme);

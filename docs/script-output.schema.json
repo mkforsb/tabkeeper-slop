@@ -29,6 +29,7 @@
         },
         "image": { "$ref": "#/$defs/text", "description": "Image URL." },
         "url": { "$ref": "#/$defs/text" },
+        "extra_urls": { "$ref": "#/$defs/extra_urls" },
         "items": { "$ref": "#/$defs/items" },
         "key": {
           "description": "If set, an update is reported exactly when `key` changes; items and text are not diffed. () means unset. Not cut to 2000 characters.",
@@ -36,6 +37,17 @@
         }
       },
       "additionalProperties": false
+    },
+    "extra_urls": {
+      "description": "More links, e.g. reviews of a film, shown in a menu. Entries with an empty URL are dropped, then the first 20 are kept. () is none.",
+      "type": ["array", "null"],
+      "items": {
+        "description": "[title, url]. The URL is shown if the title is empty.",
+        "type": "array",
+        "prefixItems": [{ "$ref": "#/$defs/text" }, { "$ref": "#/$defs/text" }],
+        "minItems": 2,
+        "maxItems": 2
+      }
     },
     "items": {
       "description": "() entries are dropped, then the first 200 are kept. () is no items.",
@@ -61,7 +73,8 @@
         "url": { "$ref": "#/$defs/text" },
         "image": { "$ref": "#/$defs/text", "description": "Image URL." },
         "text": { "$ref": "#/$defs/text" },
-        "date": { "$ref": "#/$defs/text", "description": "Shown as-is; not parsed." }
+        "date": { "$ref": "#/$defs/text", "description": "Shown as-is; not parsed." },
+        "extra_urls": { "$ref": "#/$defs/extra_urls" }
       },
       "additionalProperties": false
     }

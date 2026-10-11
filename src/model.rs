@@ -54,6 +54,8 @@ pub struct Item {
     pub image: String,
     pub text: String,
     pub date: String,
+    /// More links as (title, url), e.g. reviews of a film. Shown in a menu.
+    pub extra_urls: Vec<(String, String)>,
 }
 
 /// What a script produces. Rendered on the dashboard and diffed between runs.
@@ -64,6 +66,8 @@ pub struct Output {
     pub text: String,
     pub image: String,
     pub url: String,
+    /// More links as (title, url), like [`Item::extra_urls`].
+    pub extra_urls: Vec<(String, String)>,
     pub items: Vec<Item>,
     /// If set, an update is reported exactly when `key` changes; items and text are not diffed.
     #[serde(skip_serializing_if = "Option::is_none")]

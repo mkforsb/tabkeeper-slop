@@ -4,6 +4,7 @@
 mod appearance;
 mod images;
 mod pages;
+mod popup;
 mod style;
 mod widgets;
 

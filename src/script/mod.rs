@@ -24,6 +24,7 @@ const MAX_ROUNDS: u32 = 8;
 const MAX_FETCHES: usize = 40;
 const MAX_OPERATIONS: u64 = 50_000_000;
 const MAX_ITEMS: usize = 200;
+const MAX_EXTRA_URLS: usize = 20;
 const MAX_FIELD: usize = 2000;
 const MAX_LOGS: usize = 200;
 const PENDING_FETCH: &str = "__tabkeeper_pending_fetch__";
@@ -287,7 +288,11 @@ fn display(v: &Dynamic) -> String {
 }
 
 fn field(m: &Map, key: &str) -> String {
-    let s = m.get(key).map(display).unwrap_or_default();
+    clip(m.get(key).map(display).unwrap_or_default())
+}
+
+/// Cuts `s` to [`MAX_FIELD`] characters.
+fn clip(s: String) -> String {
     if s.chars().count() > MAX_FIELD {
         let mut t: String = s.chars().take(MAX_FIELD).collect();
         t.push('…');
@@ -306,6 +311,7 @@ fn to_item(v: Dynamic) -> Item {
             image: field(&m, "image"),
             text: field(&m, "text"),
             date: field(&m, "date"),
+            extra_urls: to_extra_urls(m.get("extra_urls")),
         }
     } else {
         Item { title: display(&v), ..Default::default() }
@@ -316,6 +322,19 @@ fn to_item(v: Dynamic) -> Item {
     item
 }
 
+/// Reads `[[title, url], ...]`. Entries that aren't pairs, or have no URL, are dropped.
+fn to_extra_urls(v: Option<&Dynamic>) -> Vec<(String, String)> {
+    let Some(list) = v.and_then(|v| v.read_lock::<Array>().map(|a| a.clone())) else { return Vec::new() };
+    list.into_iter()
+        .filter_map(|e| match e.read_lock::<Array>()?.as_slice() {
+            [title, url] => Some((clip(display(title)), clip(display(url)))),
+            _ => None,
+        })
+        .filter(|(_, url)| !url.is_empty())
+        .take(MAX_EXTRA_URLS)
+        .collect()
+}
+
 fn to_items(v: Option<&Dynamic>) -> Vec<Item> {
     v.and_then(|v| v.read_lock::<Array>().map(|a| a.clone()))
         .map(|a| a.into_iter().filter(|v| !v.is_unit()).take(MAX_ITEMS).map(to_item).collect())
@@ -323,7 +342,7 @@ fn to_items(v: Option<&Dynamic>) -> Vec<Item> {
 }
 
 /// Converts a script's final value into an [`Output`].
-/// Accepts a map (`#{ title, text, image, url, items, key }`), an array of items, or a string.
+/// Accepts a map (`#{ title, text, image, url, extra_urls, items, key }`), an array of items, or a string.
 pub fn to_output(v: Dynamic) -> Result<Output, String> {
     if v.is_unit() {
         return Err("script returned nothing; end it with a map like #{ text: \"...\", items: [...] }".into());
@@ -334,6 +353,7 @@ pub fn to_output(v: Dynamic) -> Result<Output, String> {
             text: field(&m, "text"),
             image: field(&m, "image"),
             url: field(&m, "url"),
+            extra_urls: to_extra_urls(m.get("extra_urls")),
             items: to_items(m.get("items")),
             key: m.get("key").filter(|k| !k.is_unit()).map(display),
         });
@@ -362,7 +382,8 @@ pub const API_HELP: &[(&str, &str)] = &[
     ("strip_tags(html) / squish(s)", "HTML to text, collapse whitespace."),
     ("log(x) / print(x)", "Write to the run log."),
     ("prev, NAME", "The previous successful output (or ()) and this Interest's name."),
-    ("Return value", "#{ title, text, image, url, items: [#{ id, title, url, image, text, date }], key }. New item ids and changed text count as updates; if `key` is set, only a change of key counts."),
+    ("Return value", "#{ title, text, image, url, extra_urls, items: [#{ id, title, url, image, text, date, extra_urls }], key }. New item ids and changed text count as updates; if `key` is set, only a change of key counts."),
+    ("extra_urls: [[title, url], ..]", "More links, e.g. reviews of a film, shown in a menu behind a 🌐 button. Entries without a URL are dropped."),
 ];
 
 #[cfg(test)]
@@ -387,6 +408,19 @@ mod tests {
         assert_eq!(out.items[0].id, "a");
         assert_eq!(out.items[1].id, "u");
         assert!(eval("()", Default::default()).0.is_err());
+    }
+
+    #[test]
+    fn extra_urls() {
+        let script = r#"#{
+            extra_urls: [["Site", "https://s.test/"]],
+            items: [#{ title: "Film", extra_urls: [["IMDb", "https://imdb.test/1"], ["", "https://rt.test/1"], ["Gone", ()], ["https://x.test/"], "y"] }],
+        }"#;
+        let out = eval(script, Default::default()).0.unwrap();
+        let pairs = |v: &[(&str, &str)]| v.iter().map(|(t, u)| (t.to_string(), u.to_string())).collect::<Vec<_>>();
+        assert_eq!(out.extra_urls, pairs(&[("Site", "https://s.test/")]));
+        assert_eq!(out.items[0].extra_urls, pairs(&[("IMDb", "https://imdb.test/1"), ("", "https://rt.test/1")]));
+        assert!(eval("#{ extra_urls: () }", Default::default()).0.unwrap().extra_urls.is_empty());
     }
 
     #[test]
@@ -523,10 +557,10 @@ mod tests {
         #[test]
         fn accepts_what_the_app_reads() {
             for script in [
-                r#"#{ title: "T", text: "x", image: (), url: "u", key: (),
-                      items: [#{ id: 1, title: "a", url: "u", image: (), text: "t", date: "d" }, "b", 3, ()] }"#,
+                r#"#{ title: "T", text: "x", image: (), url: "u", key: (), extra_urls: [["IMDb", "https://imdb.test/"]],
+                      items: [#{ id: 1, title: "a", url: "u", image: (), text: "t", date: "d", extra_urls: [["", "u"], ["x", ()]] }, "b", 3, ()] }"#,
                 "#{}",
-                "#{ items: (), key: 7 }",
+                "#{ items: (), key: 7, extra_urls: () }",
                 r#"[#{ title: "a" }, "b"]"#,
                 r#""hi""#,
                 "42",
@@ -546,6 +580,8 @@ mod tests {
                 "#{ text: [1] }",
                 "#{ items: [[1]] }",
                 r#"#{ items: "a" }"#,
+                r#"#{ extra_urls: ["https://x.test/"] }"#,
+                r#"#{ items: [#{ extra_urls: [["a", "b", "c"]] }] }"#,
             ] {
                 assert!(check(script, Default::default()).is_err(), "{script}");
             }

@@ -1,11 +1,12 @@
 //! View pieces shared by the pages (the counterpart of the Dioxus `components.rs`).
 
-use iced::widget::{button, column, container, row, rule, space, text, text_input, Column};
+use iced::widget::{button, column, container, row, rule, space, stack, text, text_input, Column};
 use iced::{padding, Center, Fill, Shrink};
 use tabkeeper::app::{fmt_ago, fmt_in, fmt_item_date, SHOW_MORE_STEP};
 use tabkeeper::engine;
 use tabkeeper::model::{Interest, Item, Output};
 
+use crate::popup::popup;
 use crate::style::{self, bold, H1, SMALL};
 use crate::{App, Message, Route};
 
@@ -203,6 +204,20 @@ pub fn star<'a>(app: &App, interest_id: &str, item: &Item) -> Element<'a> {
         .into()
 }
 
+/// A 🌐 that opens a menu of `links`, (title, url) pairs.
+pub fn extra_urls<'a>(links: &[(String, String)]) -> Element<'a> {
+    const PAD: [u16; 2] = [5, 9];
+    let label = |(title, url): &(String, String)| text(clamp(if title.is_empty() { url } else { title }, 50)).wrapping(text::Wrapping::None);
+    let rows = Column::with_children(links.iter().map(|link| {
+        button(label(link)).width(Fill).padding(PAD).style(style::menu_item).on_press(Message::OpenUrl(link.1.clone())).into()
+    }));
+    // Full-width rows would make the menu as wide as the window, so an
+    // invisible copy of the labels sets its width.
+    let sizer = Column::with_children(links.iter().map(|link| container(label(link).color(iced::Color::TRANSPARENT)).padding(PAD).into()));
+    let menu = container(stack![sizer, rows].width(Shrink)).padding(4).style(style::popup);
+    popup(container(text("🌐").size(13)).padding([0, 2]), menu).into()
+}
+
 /// `star`: the interest the item belongs to, to show a [`star`].
 pub fn item_row<'a>(app: &App, item: &Item, fresh: bool, star: Option<&str>) -> Element<'a> {
     let title = item_title(item);
@@ -214,8 +229,11 @@ pub fn item_row<'a>(app: &App, item: &Item, fresh: bool, star: Option<&str>) -> 
         body = body.push(text(clamp(&item.text, 220)).size(SMALL).style(style::ink_2).wrapping(text::Wrapping::WordOrGlyph));
     }
     let mut r = row![].spacing(10);
-    if let Some(interest_id) = star {
-        r = r.push(self::star(app, interest_id, item));
+    // The star with the extra URLs below it.
+    let star = star.map(|interest_id| self::star(app, interest_id, item));
+    let links = (!item.extra_urls.is_empty()).then(|| extra_urls(&item.extra_urls));
+    if star.is_some() || links.is_some() {
+        r = r.push(column![].push(star).push(links).spacing(2).width(20).align_x(Center));
     }
     if !item.image.is_empty() && !app.images.failed(&item.image) {
         let placeholder = container(space::horizontal()).style(style::log);
@@ -249,8 +267,13 @@ pub fn output_view<'a>(
         let placeholder = container(space::horizontal()).style(style::log);
         col = col.push(app.images.view(&output.image, 280.0, 160.0, 8.0, placeholder));
     }
-    if !output.title.is_empty() {
-        col = col.push(ext_link(output.title.as_str(), &output.url, bold()));
+    if !output.title.is_empty() || !output.extra_urls.is_empty() {
+        let title = ext_link(output.title.as_str(), &output.url, bold());
+        if output.extra_urls.is_empty() {
+            col = col.push(title);
+        } else {
+            col = col.push(row![title, extra_urls(&output.extra_urls)].spacing(4).align_y(Center));
+        }
     }
     if !output.text.is_empty() {
         col = col.push(text(clamp(&output.text, 600)).style(style::ink_2).wrapping(text::Wrapping::WordOrGlyph));

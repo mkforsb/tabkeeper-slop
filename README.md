@@ -58,6 +58,39 @@ and editor fonts (applied on restart). These are stored separately, in
 Desktop data goes to `$XDG_DATA_HOME/tabkeeper` (override with
 `TABKEEPER_DATA_DIR`). Workers run while the app window is open.
 
+### Linux setup
+
+The desktop apps need some system libraries. On Debian (forky), this is what
+was installed to build both apps and drive them on a virtual display; it may be
+more than strictly necessary:
+
+```sh
+# Building the Dioxus desktop app (WebKitGTK webview)
+apt-get install pkg-config libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libssl-dev
+# Running the Iced app (it panics at startup without libxkbcommon-x11)
+apt-get install libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev libxcursor1 libxrandr2 libxi6 libx11-xcb1 mesa-vulkan-drivers libvulkan1
+# A virtual display, screenshots, input, and fonts (emoji for the 🌐 button)
+apt-get install xvfb x11-utils imagemagick xdotool dbus-x11 fonts-noto-color-emoji fonts-dejavu-core
+# Type-checking the web build without dx
+rustup target add wasm32-unknown-unknown
+cargo check --target wasm32-unknown-unknown --features web
+```
+
+To run either app without a display, and take screenshots:
+
+```sh
+Xvfb :99 -screen 0 1280x800x24 &
+export DISPLAY=:99 TABKEEPER_DATA_DIR=/tmp/tk-data   # keep test data apart
+./target/debug/tabkeeper-iced &                       # or, for Dioxus:
+WEBKIT_DISABLE_DMABUF_RENDERER=1 dbus-run-session -- ./target/debug/tabkeeper &
+xdotool mousemove 380 300 click 1                     # click; `xdotool key` needs the window focused
+import -window root shot.png                          # screenshot (ImageMagick)
+```
+
+Links open with `xdg-open` (Iced) or the `webbrowser` crate (Dioxus, which
+honours `$BROWSER`). Without a browser installed, point both at a script that
+logs its argument to check which URL a click opens.
+
 ### Web caveats
 
 - **CORS.** Browsers only let a page read another site's responses if that site
@@ -88,9 +121,13 @@ let doc = html(fetch("https://slakthusetclub.se/events"));
 }
 ```
 
-Output fields: `title`, `text`, `image`, `url`, `items` (each with `id`, `title`,
-`url`, `image`, `text`, `date`; `id` defaults to `url`, then `title`, then
-`text`), and an optional `key`. The dashboard renders all of them. A bare array
+Output fields: `title`, `text`, `image`, `url`, `extra_urls`, `items` (each
+with `id`, `title`, `url`, `image`, `text`, `date`, `extra_urls`; `id` defaults
+to `url`, then `title`, then `text`), and an optional `key`. The dashboard
+renders all of them. `extra_urls` is a list of `[title, url]` pairs, e.g.
+`[["IMDb", imdb_url], ["Rotten Tomatoes", rt_url]]`, shown in a menu behind a
+🌐 button: under an item's star, or next to the output's title. Pairs without
+a URL are dropped, and an empty title shows the URL. A bare array
 is shorthand for `#{ items: [...] }`, and any other value for `#{ text: ... }`.
 [`docs/script-output.schema.json`](docs/script-output.schema.json) is a JSON
 Schema for the output, with `()` as `null`. It is a little stricter than the
@@ -166,6 +203,7 @@ tabkeeper-iced/
   src/pages/       one module per page
   src/widgets.rs   shared view pieces; style.rs: the CSS palette as Iced styles
   src/images.rs    downloads remote images as they scroll into view
+  src/popup.rs     click-to-open popup widget (the 🌐 menu)
   src/appearance.rs  UI scale and font settings
 ```
 

@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use dioxus::prelude::*;
 use tabkeeper::app::{fmt_item_date, SHOW_MORE_STEP};
 use tabkeeper::engine;
@@ -88,6 +90,45 @@ pub fn Star(interest_id: String, item: Item) -> Element {
     }
 }
 
+/// A 🌐 button that opens a menu of `links`, (title, url) pairs. The menu is
+/// fixed-positioned below the button, so a card's `overflow` doesn't clip it.
+#[component]
+pub fn ExtraUrls(links: Vec<(String, String)>) -> Element {
+    let mut anchor = use_signal(|| None::<Rc<MountedData>>);
+    // The menu's position while open.
+    let mut at = use_signal(|| None::<(f64, f64)>);
+    rsx! {
+        button {
+            class: "globe",
+            aria_label: "More links",
+            onmounted: move |e| anchor.set(Some(e.data())),
+            onclick: move |_| async move {
+                if let Some(m) = anchor() {
+                    if let Ok(r) = m.get_client_rect().await {
+                        at.set(Some((r.min_x(), r.max_y())));
+                    }
+                }
+            },
+            "🌐"
+        }
+        if let Some((x, y)) = at() {
+            div { class: "popup-backdrop", onclick: move |_| at.set(None), onwheel: move |_| at.set(None) }
+            div { class: "popup-menu", style: "left: min({x}px, calc(100vw - 21rem)); top: {y + 4.0}px;",
+                for (title, url) in links {
+                    a {
+                        href: "{url}",
+                        target: "_blank",
+                        rel: "noopener",
+                        title: "{url}",
+                        onclick: move |_| at.set(None),
+                        if title.is_empty() { "{url}" } else { "{title}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// `interest_id`: the interest the item belongs to, to show a [`Star`].
 #[component]
 pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool, #[props(default)] interest_id: Option<String>) -> Element {
@@ -95,8 +136,13 @@ pub fn ItemRow(item: Item, #[props(default = false)] fresh: bool, #[props(defaul
     let show_text = !item.text.is_empty() && item.text != title;
     rsx! {
         div { class: if fresh { "item fresh" } else { "item" },
-            if let Some(interest_id) = interest_id {
-                Star { interest_id, item: item.clone() }
+            if interest_id.is_some() || !item.extra_urls.is_empty() {
+                div { class: "item-actions",
+                    if let Some(interest_id) = interest_id {
+                        Star { interest_id, item: item.clone() }
+                    }
+                    if !item.extra_urls.is_empty() { ExtraUrls { links: item.extra_urls.clone() } }
+                }
             }
             if !item.image.is_empty() {
                 img { class: "item-thumb", src: "{item.image}", alt: "", referrerpolicy: "no-referrer", loading: "lazy" }
@@ -138,13 +184,14 @@ pub fn OutputView(
             if show_image && !output.image.is_empty() {
                 img { class: "output-image", src: "{output.image}", alt: "", referrerpolicy: "no-referrer" }
             }
-            if !output.title.is_empty() {
+            if !output.title.is_empty() || !output.extra_urls.is_empty() {
                 div { class: "output-title",
                     if output.url.is_empty() {
                         "{output.title}"
                     } else {
                         a { href: "{output.url}", target: "_blank", rel: "noopener", "{output.title}" }
                     }
+                    if !output.extra_urls.is_empty() { ExtraUrls { links: output.extra_urls.clone() } }
                 }
             }
             if !output.text.is_empty() { p { class: "output-text", "{output.text}" } }
