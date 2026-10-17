@@ -48,6 +48,11 @@ pub fn main() -> iced::Result {
         .window(window::Settings {
             size: Size::new(WINDOW_SIZE.width / scale, WINDOW_SIZE.height / scale),
             min_size: Some(Size::new(900.0, 560.0)),
+            #[cfg(target_os = "linux")]
+            platform_specific: window::settings::PlatformSpecific {
+                application_id: "tabkeeper".into(),
+                ..Default::default()
+            },
             ..Default::default()
         })
         .settings(iced::Settings { default_font: style::regular(), default_text_size: 14.into(), ..Default::default() })
